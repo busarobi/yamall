@@ -3,6 +3,7 @@ package com.yahoo.labs.yamall.local;
 import com.yahoo.labs.yamall.core.Instance;
 import com.yahoo.labs.yamall.ml.*;
 import com.yahoo.labs.yamall.parser.VWParser;
+import javafx.scene.chart.PieChart;
 
 import java.io.*;
 import java.util.LinkedList;
@@ -13,9 +14,8 @@ import java.util.concurrent.TimeUnit;
  * Created by busafekete on 7/11/17.
  */
 public class CompareLearners extends Thread {
-
-    protected String trainFile = null;
-    protected String testFile = null;
+    protected DataGenerator train = null;
+    protected DataGenerator test = null;
     protected String outputFile = null;
 
     protected String method = null;
@@ -29,9 +29,9 @@ public class CompareLearners extends Thread {
     public static double maxPrediction = 50.0;
 
 
-    public CompareLearners ( String trainFile, String testFile, String outputFile, String method ) throws IOException {
-        this.trainFile = trainFile;
-        this.testFile = testFile;
+    public CompareLearners ( DataGenerator train, DataGenerator test, String outputFile, String method ) throws IOException {
+        this.train = train;
+        this.test = test;
         this.method = method;
         this.outputFile = outputFile + "_" + this.method + ".txt";
 
@@ -53,9 +53,6 @@ public class CompareLearners extends Thread {
     public void train() throws IOException {
         long start = System.nanoTime();
 
-        FileInputStream fstream = new FileInputStream(this.trainFile);
-        BufferedReader br = new BufferedReader(new InputStreamReader(fstream));
-
         results = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(outputFile )));
 
         VWParser vwparser = new VWParser(bitsHash, null, false);
@@ -66,7 +63,8 @@ public class CompareLearners extends Thread {
 
         do {
             Instance sample;
-            String strLine = br.readLine();
+            String strLine = train.getNextInstance();
+
             if (strLine != null)
                 sample = vwparser.parse(strLine);
             else
@@ -94,7 +92,7 @@ public class CompareLearners extends Thread {
         }
         while (true);
 
-        br.close();
+        train.close();
         results.close();
 
         long millis = System.nanoTime() - start;
@@ -103,8 +101,6 @@ public class CompareLearners extends Thread {
     }
 
     public double eval() throws  IOException {
-        FileInputStream fstream = new FileInputStream(testFile);
-        BufferedReader br = new BufferedReader(new InputStreamReader(fstream));
 
         VWParser vwparser = new VWParser(bitsHash, null, false);
 
@@ -114,7 +110,7 @@ public class CompareLearners extends Thread {
 
         do {
             Instance sample;
-            String strLine = br.readLine();
+            String strLine = test.getNextInstance();
             if (strLine != null)
                 sample = vwparser.parse(strLine);
             else
@@ -129,7 +125,7 @@ public class CompareLearners extends Thread {
         }
         while (true);
 
-        br.close();
+        test.close();
 
         return cumLoss / (double) numSamples;
     }
@@ -178,25 +174,29 @@ public class CompareLearners extends Thread {
     }
 
     public static void main(String[] args) throws IOException {
-        if (args.length < 3) {
+        if (args.length < 1) {
             System.out.println(
-                    "Usage: java -classpath yamall-examples-jar-with-dependencies.jar com.yahoo.labs.yamall.examples.StatisticsVWFile vw_filename_train vw_filename_test output");
+                    "Usage: java -classpath yamall-examples-jar-with-dependencies.jar com.yahoo.labs.yamall.examples.StatisticsVWFile output");
             System.exit(0);
         }
 
-        String trainFile = args[0];
-        String testFile = args[1];
-        String resultFile = args[2];
+        int trainSize = 5000000;
+        int testSize = 50000;
+        String resultFile = args[0];
 
-        System.out.println( "Result file: " + trainFile );
-        System.out.println( "Result file: " + testFile );
+        DataGenerator train = new DataGeneratorNormal(trainSize, 1000, 100);
+        DataGenerator test = train.copy();
+        ((DataGeneratorNormal)test).setNum(testSize);
 
-        //String[] methodNames = {"SGD_VW", "SVRG", "SGD", "MB_SGD"};
-        String[] methodNames = {"SVRG", "MB_SGD"};
+        System.out.println( "Train size: " + trainSize );
+        System.out.println( "Test file: " + testSize );
+
+        String[] methodNames = {"SGD_VW", "SVRG", "SGD", "MB_SGD"};
+        //String[] methodNames = {"SVRG", "MB_SGD"};
         Queue<CompareLearners> queue = new LinkedList<CompareLearners>();
 
         for( String m : methodNames ){
-            CompareLearners cp = new CompareLearners(trainFile,testFile,resultFile,m);
+            CompareLearners cp = new CompareLearners(train.copy(), test.copy(), resultFile,m);
             cp.start();
             queue.add(cp);
         }
