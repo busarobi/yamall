@@ -149,7 +149,7 @@ public class CompareLearners extends Thread {
             double learningRate = 0.05;
             svrg.setLearningRate(learningRate);
             svrg.setRegularizationParameter(0.0);
-            svrg.setStep(50);
+            svrg.setStep(500);
             //svrg.doAveraging();
 
             learner = svrg;
@@ -162,10 +162,10 @@ public class CompareLearners extends Thread {
             MiniBatchSGD mbsgd = new MiniBatchSGD(bitsHash);
             mbsgd.setLoss(lossFnc);
 
-            double learningRate = 0.5;
+            double learningRate = 0.05;
             mbsgd.setLearningRate(learningRate);
-            mbsgd.setRegularizationParameter(0.001);
-            mbsgd.setStep(50);
+            mbsgd.setRegularizationParameter(0.0);
+            mbsgd.setStep(500);
 
             learner = mbsgd;
         }
