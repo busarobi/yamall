@@ -1,5 +1,6 @@
 package com.yahoo.labs.yamall.local;
 
+
 import com.yahoo.labs.yamall.core.Instance;
 import com.yahoo.labs.yamall.ml.*;
 import com.yahoo.labs.yamall.parser.VWParser;
@@ -7,6 +8,7 @@ import javafx.scene.chart.PieChart;
 
 import java.io.*;
 import java.util.LinkedList;
+import java.util.Properties;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
 
@@ -17,11 +19,12 @@ public class CompareLearners extends Thread {
     protected DataGenerator train = null;
     protected DataGenerator test = null;
     protected String outputFile = null;
+    protected String postFix = null;
 
     protected String method = null;
     protected BufferedWriter results = null;
     protected Learner learner = null;
-
+    protected Properties properties = null;
     public static int bitsHash = 22;
     public static int evalPeriod = 1000;
 
@@ -29,14 +32,20 @@ public class CompareLearners extends Thread {
     public static double maxPrediction = 50.0;
 
 
-    public CompareLearners ( DataGenerator train, DataGenerator test, String outputFile, String method ) throws IOException {
+    public CompareLearners ( DataGenerator train, DataGenerator test, Properties properties, String postFix ) throws IOException {
         this.train = train;
         this.test = test;
-        this.method = method;
-        this.outputFile = outputFile + "_" + this.method + ".txt";
+        this.properties = properties;
+        this.postFix = postFix;
+        this.method = properties.getProperty("method", null);
+
+        this.learner = getLearner();
+
+        String fname = this.properties.getProperty("output");
+        this.outputFile = fname + "_" + this.method + "_" + this.postFix + ".txt";
 
         System.out.println( "Result file: " + this.outputFile );
-        this.learner = getLearner();
+
 
     }
 
@@ -135,10 +144,16 @@ public class CompareLearners extends Thread {
         Learner learner = null;
         Loss lossFnc = new LogisticLoss();
 
-        System.out.println( "Method: " + this.method );
+        System.out.println( "----> Method: " + this.method );
 
         if ( this.method.compareToIgnoreCase("SGD_VW") == 0) {
-            double learningRate = 1.0;
+
+            double learningRate = Double.parseDouble(this.properties.getProperty("sgd_vw_lr", "1.0"));
+
+            this.postFix = String.format("lr_%f_", learningRate) + this.postFix;
+
+            System.out.println( "SGD_VW learning rate: " + learningRate);
+
             learner = new SGD_VW(bitsHash);
             learner.setLoss(lossFnc);
             learner.setLearningRate(learningRate);
@@ -146,15 +161,29 @@ public class CompareLearners extends Thread {
             SVRG svrg = new SVRG(bitsHash);
             svrg.setLoss(lossFnc);
 
-            double learningRate = 0.05;
+            double learningRate = Double.parseDouble(this.properties.getProperty("svrg_lr", "0.05"));
+            double regPar = Double.parseDouble(this.properties.getProperty("svrg_reg", "0.0"));
+            int step = Integer.parseInt(this.properties.getProperty("svrg_step", "50"));
+
+            this.postFix = String.format("lr_%f_reg_%f_step_%d_", learningRate, regPar, step) + this.postFix;
+
+            System.out.println( "SVRG learning rate: " + learningRate);
+            System.out.println( "SVRG regularization param: " + regPar);
+            System.out.println( "SVRG step: " + step);
+
             svrg.setLearningRate(learningRate);
-            svrg.setRegularizationParameter(0.0);
-            svrg.setStep(500);
+            svrg.setRegularizationParameter(regPar);
+            svrg.setStep(step);
             //svrg.doAveraging();
 
             learner = svrg;
         } else if ( this.method .compareToIgnoreCase("SGD") == 0) {
-            double learningRate = 1.0;
+            double learningRate = Double.parseDouble(this.properties.getProperty("sgd_lr", "1.0"));
+
+            this.postFix = String.format("lr_%f_", learningRate) + this.postFix;
+
+            System.out.println( "SGD learning rate: " + learningRate);
+
             learner = new SGD(bitsHash);
             learner.setLoss(lossFnc);
             learner.setLearningRate(learningRate);
@@ -162,11 +191,21 @@ public class CompareLearners extends Thread {
             MiniBatchSGD mbsgd = new MiniBatchSGD(bitsHash);
             mbsgd.setLoss(lossFnc);
 
-            double learningRate = 0.05;
-            mbsgd.setLearningRate(learningRate);
-            mbsgd.setRegularizationParameter(0.0);
-            mbsgd.setStep(500);
+            double learningRate = Double.parseDouble(this.properties.getProperty("mb_sgd_lr", "0.05"));
+            double regPar = Double.parseDouble(this.properties.getProperty("mb_sgd_reg", "0.0"));
+            int step = Integer.parseInt(this.properties.getProperty("mb_sgd_step", "50"));
 
+            this.postFix = String.format("lr_%f_reg_%f_step_%d_", learningRate, regPar, step) + this.postFix;
+
+            System.out.println( "MB SGD learning rate: " + learningRate);
+            System.out.println( "MB SGD regularization param: " + regPar);
+            System.out.println( "MB SGD step: " + step);
+
+            mbsgd.setLearningRate(learningRate);
+            mbsgd.setRegularizationParameter(regPar);
+            mbsgd.setStep(step);
+            Integer i = 1;
+            int j = i;
             learner = mbsgd;
         }
 
@@ -180,23 +219,36 @@ public class CompareLearners extends Thread {
             System.exit(0);
         }
 
-        int trainSize = 5000000;
-        int testSize = 50000;
-        String resultFile = args[0];
+        Properties properties = ReadProperty.readProperty(args[0]);
 
-        DataGenerator train = new DataGeneratorNormal(trainSize, 1000, 100);
-        DataGenerator test = train.copy();
-        ((DataGeneratorNormal)test).setNum(testSize);
+        int trainSize = Integer.parseInt(properties.getProperty("tain_size", "5000000"));
+        int testSize = Integer.parseInt(properties.getProperty("test_size", "50000"));
+        int dim = 1000;
+        int sparsity = 100;
+
+        String dataType = properties.getProperty("data_type", "default");
+        DataGenerator train = null;
+        DataGenerator test = null;
+        if (dataType.compareToIgnoreCase("default") == 0) {
+            train = new DataGeneratorNormal(trainSize, dim, sparsity);
+            test = train.copy();
+            ((DataGeneratorNormal) test).setNum(testSize);
+        }
 
         System.out.println( "Train size: " + trainSize );
         System.out.println( "Test file: " + testSize );
 
-        String[] methodNames = {"SGD_VW", "SVRG", "SGD", "MB_SGD"};
+        System.out.println( "Dim: " + dim );
+        System.out.println( "Sparsity: " + sparsity );
+
+
+        int numOfThreads = Integer.parseInt(properties.getProperty("threads", "10"));
         //String[] methodNames = {"SVRG", "MB_SGD"};
         Queue<CompareLearners> queue = new LinkedList<CompareLearners>();
 
-        for( String m : methodNames ){
-            CompareLearners cp = new CompareLearners(train.copy(), test.copy(), resultFile,m);
+        for( int i=0; i < numOfThreads; i++ ){
+            String postFix = String.format("%04d_%s", i, dataType);
+            CompareLearners cp = new CompareLearners(train.copy(), test.copy(), properties, postFix);
             cp.start();
             queue.add(cp);
         }
