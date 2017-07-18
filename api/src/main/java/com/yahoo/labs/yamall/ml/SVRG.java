@@ -25,6 +25,7 @@ public class SVRG implements Learner {
     private int gradStep = 0;
 
     private transient double[] w;
+    private transient int[] last_updated; //records when each index was last updated for proper regularization
 
     private transient double[] Gbatch;
     private transient double[] w_prev;
@@ -73,29 +74,12 @@ public class SVRG implements Learner {
     private double accumulateGradient( Instance sample ) {
         gatherGradIter++;
 
-        double pred = 0;
-        for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
-            double x_i;
-            if ((x_i = entry.getDoubleValue()) != 0.0) {
-                int key = entry.getIntKey();
-                double w_i = w[key];
-                pred += w_i * x_i;
-            }
-        }
+        double pred = predict(sample);
 
         final double grad = -lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
 
         if (Math.abs(grad) > 1e-8) {
-
-            for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
-                double x_i;
-                if ((x_i = entry.getDoubleValue()) != 0.0) {
-                    int key = entry.getIntKey();
-                    double G_i = Gbatch[key];
-                    G_i += (grad * x_i);
-                    Gbatch[key] = G_i;
-                }
-            }
+            sample.getVector().addScaledSparseVectorToDenseVector(Gbatch, grad);
         }
         return pred;
     }
@@ -105,42 +89,39 @@ public class SVRG implements Learner {
         double pred_prev = 0;
         gradStep++;
 
-        for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
-            double x_i;
-            if ((x_i = entry.getDoubleValue()) != 0.0) {
+        if (lambda != 0.0) {
+            //this loop lazily applies several steps of SGD on the regularizer in a row.
+            for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
                 int key = entry.getIntKey();
+                double decay_rate = 1.0 - lambda * eta;
+                int missed_steps = gradStep - last_updated[key] - 1
+                scaling = Math.pow(decay_rate, missed_steps);
+                w[key] = w_prev[key] + scaling * (w[key] - w_prev[key]);
 
-                double w_i = w[key];
-                pred += w_i * x_i;
-
-                double w_i_prev = w_prev[key];
-                pred_prev += w_i_prev * x_i;
-
+                //update average properly (update to gradStep - 1th average).
+                if (averaging) {
+                    double sum_decay_powers = (decay_rate - math.pow(decay_rate, missed_steps+1)) / (1.0 - decay_rate);
+                    w_avg[key] = (last_update[key] * w_avg[key] +  sum_decay_powers * w[key])/(gradStep - 1);
+                }
+                last_updated[key] = gradStep;
             }
         }
+
+        pred = predict(sample);
+        pred_prev = predict_prev(sample);
 
         final double grad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
         final double grad_prev = lossFnc.negativeGradient(pred_prev, sample.getLabel(), sample.getWeight());
         final double grad_diff = grad_prev - grad;
 
+        
         if (Math.abs(grad) > 1e-8) {
+            sample.getVector().addScaledSparseVectorToDenseVector(w, eta * grad_diff);
 
-            for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
-                double x_i;
-                if ((x_i = entry.getDoubleValue()) != 0.0) {
+            if (averaging) {
+                for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
                     int key = entry.getIntKey();
-                    double Gb = Gbatch[key];
-                    if(lambda==0.0)
-                        w[key] += this.eta * ( grad_diff * x_i - Gb );
-                    else {   // regularization
-                        double wi = w[key];
-                        double wi_prev = w_prev[key];
-                        w[key] += this.eta * ( grad_diff * x_i - Gb - lambda * ( wi - wi_prev ) );
-                    }
-
-                    if (this.averaging ){
-                        w_avg[key] += (w[key] - w_avg[key])/((double)gradStep);
-                    }
+                    w_avg[key] += (w[key] - w_avg[key])/((double)gradStep);
                 }
             }
         }
@@ -148,6 +129,23 @@ public class SVRG implements Learner {
     }
 
     private void initGatherState() {
+
+        if (lambda != 0.0) {
+            for (int i=0; i < size_hash; i++) {
+                if (last_update[i] < gradStep) {
+                    double decay_rate = 1.0 - lambda * eta;
+                    int missed_steps = gradStep - last_updated[key]
+                    scaling = Math.pow(decay_rate, missed_steps);
+                    w[i] = w_prev[i] + scaling * (w[i] - w_prev[i]);
+                    //update average properly (update to gradStep th average).
+                    if (averaging) {
+                        double sum_decay_powers = (decay_rate - math.pow(decay_rate, missed_steps+1)) / (1.0 - decay_rate);
+                        w_avg[key] = (last_update[key] * w_avg[key] +  sum_decay_powers * w[key])/(gradStep);
+                    }
+                }
+                last_updated[i] = 0;
+            }
+        }
 
         if (this.averaging ) {
             for (int i = 0; i < size_hash; i++) w[i] = w_avg[i];
@@ -158,13 +156,14 @@ public class SVRG implements Learner {
         gatherGradIter = 0;
     }
 
-    private void normalizeBathGradient() {
+    private void normalizeBatchGradient() {
         for (int i=0; i < size_hash; i++ ) Gbatch[i] /= (double)gatherGradIter;
 
-        gradStep = 0;
         if (this.averaging ) {
             for (int i = 0; i < size_hash; i++) w_avg[i] = w[i];
         }
+
+        gradStep = 0;
     }
 
     public double update(Instance sample) {
@@ -188,7 +187,7 @@ public class SVRG implements Learner {
         if ( backCounter <= 0  ) {
             if (state == SVRG.GATHER_GRADIENT ){ // switch to update parameters
                 backCounter = step;
-                normalizeBathGradient();
+                normalizeBatchGradient();
                 state = SVRG.UPDATE_GRADIENT;
             } else if ( state == SVRG.UPDATE_GRADIENT ) { // switch to gather gradient
                 backCounter = step;
@@ -200,6 +199,10 @@ public class SVRG implements Learner {
 
     public double predict(Instance sample) {
         return sample.getVector().dot(w);
+    }
+
+    public double predict_prev(Instance sample) {
+        return sample.getVector().dot(w_prev);
     }
 
     public Loss getLoss() {

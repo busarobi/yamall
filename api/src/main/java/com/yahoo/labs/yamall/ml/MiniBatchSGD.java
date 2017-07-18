@@ -71,29 +71,12 @@ public class MiniBatchSGD implements Learner {
     private double accumulateGradient( Instance sample ) {
         gatherGradIter++;
 
-        double pred = 0;
-        for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
-            double x_i;
-            if ((x_i = entry.getDoubleValue()) != 0.0) {
-                int key = entry.getIntKey();
-                double w_i = w[key];
-                pred += w_i * x_i;
-            }
-        }
+        double pred = predict(sample);
 
         final double grad = -lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
 
         if (Math.abs(grad) > 1e-8) {
-
-            for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
-                double x_i;
-                if ((x_i = entry.getDoubleValue()) != 0.0) {
-                    int key = entry.getIntKey();
-                    double G_i = Gbatch[key];
-                    G_i += (grad * x_i);
-                    Gbatch[key] = G_i;
-                }
-            }
+            sample.getVector().addScaledSparseVectorToDenseVector(Gbatch, grad);
         }
         return pred;
     }
