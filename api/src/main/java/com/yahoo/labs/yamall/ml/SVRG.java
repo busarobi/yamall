@@ -98,14 +98,21 @@ public class SVRG implements Learner {
                 int missed_steps = gradStep - last_updated[key] - 1;
                 double scaling = Math.pow(decay_rate, missed_steps);
                 w[key] = w_prev[key] + scaling * (w[key] - w_prev[key]);
+                w[key] -= missed_steps * Gbatch[key] * eta;
 
                 //update average properly (update to gradStep - 1th average).
                 if (averaging) {
                     double sum_decay_powers = (decay_rate - Math.pow(decay_rate, missed_steps+1)) / (1.0 - decay_rate);
                     w_avg[key] = (last_updated[key] * w_avg[key] +  sum_decay_powers * w[key])/(gradStep - 1);
                 }
-                last_updated[key] = gradStep;
             }
+        }
+
+        for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
+            int key = entry.getIntKey();
+            int missed_steps = gradStep - last_updated[key] - 1;
+            w[key] -= missed_steps * Gbatch[key] * eta;
+            last_updated[key] = gradStep;
         }
 
         pred = predict(sample);
@@ -144,9 +151,15 @@ public class SVRG implements Learner {
                         w_avg[i] = (last_updated[i] * w_avg[i] +  sum_decay_powers * w[i])/(gradStep);
                     }
                 }
-                last_updated[i] = 0;
             }
         }
+
+        for (int i = 0; i < size_hash; i++) {
+            int missed_steps = gradStep - last_updated[i];
+            w[i] -= missed_steps * Gbatch[i] * eta;
+            last_updated[i] = 0;
+        }
+
 
         if (this.averaging ) {
             for (int i = 0; i < size_hash; i++) w[i] = w_avg[i];

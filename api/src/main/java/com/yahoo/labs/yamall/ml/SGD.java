@@ -2,7 +2,6 @@ package com.yahoo.labs.yamall.ml;
 
 import com.yahoo.labs.yamall.core.Instance;
 import com.yahoo.labs.yamall.core.SparseVector;
-import it.unimi.dsi.fastutil.ints.Int2DoubleMap;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -41,7 +40,7 @@ public class SGD implements Learner {
 
         if (Math.abs(negativeGrad) > 1e-8) {
             final double a = eta * Math.sqrt(1 / (double)iter);
-            sample.getVector().addScaledSparseVectorToDenseVector(theta, a * negativeGrad);
+            sample.getVector().addScaledSparseVectorToDenseVector(w, a * negativeGrad);
         }
         return pred;
     }
