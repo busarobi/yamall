@@ -44,6 +44,7 @@ public class SVRG implements Learner {
             int bits) {
         size_hash = 1 << bits;
         w = new double[size_hash];
+        last_updated = new int[size_hash];
 
         lambda = 0.1/Math.sqrt(step);
 
@@ -94,14 +95,14 @@ public class SVRG implements Learner {
             for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
                 int key = entry.getIntKey();
                 double decay_rate = 1.0 - lambda * eta;
-                int missed_steps = gradStep - last_updated[key] - 1
-                scaling = Math.pow(decay_rate, missed_steps);
+                int missed_steps = gradStep - last_updated[key] - 1;
+                double scaling = Math.pow(decay_rate, missed_steps);
                 w[key] = w_prev[key] + scaling * (w[key] - w_prev[key]);
 
                 //update average properly (update to gradStep - 1th average).
                 if (averaging) {
-                    double sum_decay_powers = (decay_rate - math.pow(decay_rate, missed_steps+1)) / (1.0 - decay_rate);
-                    w_avg[key] = (last_update[key] * w_avg[key] +  sum_decay_powers * w[key])/(gradStep - 1);
+                    double sum_decay_powers = (decay_rate - Math.pow(decay_rate, missed_steps+1)) / (1.0 - decay_rate);
+                    w_avg[key] = (last_updated[key] * w_avg[key] +  sum_decay_powers * w[key])/(gradStep - 1);
                 }
                 last_updated[key] = gradStep;
             }
@@ -132,15 +133,15 @@ public class SVRG implements Learner {
 
         if (lambda != 0.0) {
             for (int i=0; i < size_hash; i++) {
-                if (last_update[i] < gradStep) {
+                if (last_updated[i] < gradStep) {
                     double decay_rate = 1.0 - lambda * eta;
-                    int missed_steps = gradStep - last_updated[key]
-                    scaling = Math.pow(decay_rate, missed_steps);
+                    int missed_steps = gradStep - last_updated[i];
+                    double scaling = Math.pow(decay_rate, missed_steps);
                     w[i] = w_prev[i] + scaling * (w[i] - w_prev[i]);
                     //update average properly (update to gradStep th average).
                     if (averaging) {
-                        double sum_decay_powers = (decay_rate - math.pow(decay_rate, missed_steps+1)) / (1.0 - decay_rate);
-                        w_avg[key] = (last_update[key] * w_avg[key] +  sum_decay_powers * w[key])/(gradStep);
+                        double sum_decay_powers = (decay_rate - Math.pow(decay_rate, missed_steps+1)) / (1.0 - decay_rate);
+                        w_avg[i] = (last_updated[i] * w_avg[i] +  sum_decay_powers * w[i])/(gradStep);
                     }
                 }
                 last_updated[i] = 0;
