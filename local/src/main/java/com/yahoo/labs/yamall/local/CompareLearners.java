@@ -4,7 +4,6 @@ package com.yahoo.labs.yamall.local;
 import com.yahoo.labs.yamall.core.Instance;
 import com.yahoo.labs.yamall.ml.*;
 import com.yahoo.labs.yamall.parser.VWParser;
-import javafx.scene.chart.PieChart;
 
 import java.io.*;
 import java.util.LinkedList;
@@ -142,7 +141,6 @@ public class CompareLearners extends Thread {
 
     public Learner getLearner(){
         Learner learner = null;
-        Loss lossFnc = new LogisticLoss();
 
         System.out.println( "----> Method: " + this.method );
 
@@ -155,11 +153,9 @@ public class CompareLearners extends Thread {
             System.out.println( "SGD_VW learning rate: " + learningRate);
 
             learner = new SGD_VW(bitsHash);
-            learner.setLoss(lossFnc);
             learner.setLearningRate(learningRate);
         } else if ( this.method.compareToIgnoreCase("SVRG") == 0) {
             SVRG svrg = new SVRG(bitsHash);
-            svrg.setLoss(lossFnc);
 
             double learningRate = Double.parseDouble(this.properties.getProperty("svrg_lr", "0.05"));
             double regPar = Double.parseDouble(this.properties.getProperty("svrg_reg", "0.0"));
@@ -185,11 +181,9 @@ public class CompareLearners extends Thread {
             System.out.println( "SGD learning rate: " + learningRate);
 
             learner = new SGD(bitsHash);
-            learner.setLoss(lossFnc);
             learner.setLearningRate(learningRate);
         } else if ( this.method .compareToIgnoreCase("MB_SGD") == 0) {
             MiniBatchSGD mbsgd = new MiniBatchSGD(bitsHash);
-            mbsgd.setLoss(lossFnc);
 
             double learningRate = Double.parseDouble(this.properties.getProperty("mb_sgd_lr", "0.05"));
             double regPar = Double.parseDouble(this.properties.getProperty("mb_sgd_reg", "0.0"));
@@ -204,10 +198,11 @@ public class CompareLearners extends Thread {
             mbsgd.setLearningRate(learningRate);
             mbsgd.setRegularizationParameter(regPar);
             mbsgd.setStep(step);
-            Integer i = 1;
-            int j = i;
             learner = mbsgd;
         }
+
+        Loss lossFnc = new LogisticLoss();
+        learner.setLoss(lossFnc);
 
         return learner;
     }
@@ -218,6 +213,7 @@ public class CompareLearners extends Thread {
                     "Usage: java -classpath yamall-examples-jar-with-dependencies.jar com.yahoo.labs.yamall.examples.StatisticsVWFile output");
             System.exit(0);
         }
+        System.out.println("Wed Jul 19 15:13:33 UTC 2017");
 
         Properties properties = ReadProperty.readProperty(args[0]);
 
