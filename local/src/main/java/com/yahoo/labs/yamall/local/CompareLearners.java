@@ -155,8 +155,6 @@ public class CompareLearners extends Thread {
             learner = new SGD_VW(bitsHash);
             learner.setLearningRate(learningRate);
         } else if ( this.method.compareToIgnoreCase("SVRG") == 0) {
-            SVRG svrg = new SVRG(bitsHash);
-
             double learningRate = Double.parseDouble(this.properties.getProperty("svrg_lr", "0.05"));
             double regPar = Double.parseDouble(this.properties.getProperty("svrg_reg", "0.0"));
             int step = Integer.parseInt(this.properties.getProperty("svrg_step", "50"));
@@ -167,6 +165,25 @@ public class CompareLearners extends Thread {
             System.out.println( "SVRG regularization param: " + regPar);
             System.out.println( "SVRG step: " + step);
 
+            SVRG svrg = new SVRG(bitsHash);
+            svrg.setLearningRate(learningRate);
+            svrg.setRegularizationParameter(regPar);
+            svrg.setStep(step);
+            //svrg.doAveraging();
+
+            learner = svrg;
+        } else if ( this.method.compareToIgnoreCase("SVRG_ADA") == 0) {
+            double learningRate = Double.parseDouble(this.properties.getProperty("svrg_ada_lr", "0.05"));
+            double regPar = Double.parseDouble(this.properties.getProperty("svrg_ada_reg", "0.0"));
+            int step = Integer.parseInt(this.properties.getProperty("svrg_ada_step", "500"));
+
+            this.postFix = String.format("lr_%f_reg_%f_step_%d_", learningRate, regPar, step) + this.postFix;
+
+            System.out.println( "SVRG learning rate: " + learningRate);
+            System.out.println( "SVRG regularization param: " + regPar);
+            System.out.println( "SVRG step: " + step);
+
+            SVRG_ADA svrg = new SVRG_ADA(bitsHash);
             svrg.setLearningRate(learningRate);
             svrg.setRegularizationParameter(regPar);
             svrg.setStep(step);
@@ -182,8 +199,17 @@ public class CompareLearners extends Thread {
 
             learner = new SGD(bitsHash);
             learner.setLearningRate(learningRate);
+        } else if ( this.method .compareToIgnoreCase("FREE_REX") == 0) {
+            double learningRate = Double.parseDouble(this.properties.getProperty("free_rex_lr", "0.01"));
+
+            this.postFix = String.format("lr_%f_", learningRate) + this.postFix;
+
+            System.out.println( "FREE REX learning rate: " + learningRate);
+
+            learner = new PerCoordinateFreeRex(bitsHash);
+            learner.setLearningRate(learningRate);
         } else if ( this.method .compareToIgnoreCase("SOLO") == 0) {
-            double learningRate = Double.parseDouble(this.properties.getProperty("solo_lr", "0.01"));
+            double learningRate = Double.parseDouble(this.properties.getProperty("solo_lr", "0.1"));
 
             this.postFix = String.format("lr_%f_", learningRate) + this.postFix;
 

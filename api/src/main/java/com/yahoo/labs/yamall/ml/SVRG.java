@@ -17,26 +17,26 @@ public class SVRG implements Learner {
     private static final int GATHER_GRADIENT = 1;
     private static final int UPDATE_GRADIENT = 2;
 
-    private double eta = .01;
-    private int step = 500;
-    private double lambda = .01;
+    protected double eta = .01;
+    protected int step = 500;
+    protected double lambda = .01;
 
-    private int backCounter = 0;
-    private int gradStep = 0;
+    protected int backCounter = 0;
+    protected int gradStep = 0;
 
-    private transient double[] w;
-    private transient int[] last_updated; //records when each index was last updated for proper regularization
+    protected transient double[] w;
+    protected transient int[] last_updated; //records when each index was last updated for proper regularization
 
-    private transient double[] Gbatch;
-    private transient double[] w_prev;
-    private transient double[] w_avg;
+    protected transient double[] Gbatch;
+    protected transient double[] w_prev;
+    protected transient double[] w_avg;
 
     private double N = 0;
-    private Loss lossFnc;
-    private double iter = 0;
-    private int size_hash = 0;
+    protected Loss lossFnc;
+    protected double iter = 0;
+    protected int size_hash = 0;
 
-    private int gatherGradIter = 0;
+    protected int gatherGradIter = 0;
 
     private int state = 2;
 
@@ -91,6 +91,7 @@ public class SVRG implements Learner {
         gradStep++;
 
         if (lambda != 0.0) {
+            System.exit(-1);
             //this loop lazily applies several steps of SGD on the regularizer in a row.
             for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
                 int key = entry.getIntKey();
@@ -136,7 +137,7 @@ public class SVRG implements Learner {
         return pred;
     }
 
-    private void initGatherState() {
+    protected void initGatherState() {
 
         if (lambda != 0.0) {
             for (int i=0; i < size_hash; i++) {
@@ -170,7 +171,7 @@ public class SVRG implements Learner {
         gatherGradIter = 0;
     }
 
-    private void normalizeBatchGradient() {
+    protected void normalizeBatchGradient() {
         for (int i=0; i < size_hash; i++ ) Gbatch[i] /= (double)gatherGradIter;
 
         if (this.averaging ) {

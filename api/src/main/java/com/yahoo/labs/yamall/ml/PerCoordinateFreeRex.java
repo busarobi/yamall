@@ -3,14 +3,13 @@
 // Please see LICENSE file in the project root for terms.
 package com.yahoo.labs.yamall.ml;
 
+import com.yahoo.labs.yamall.core.Instance;
+import com.yahoo.labs.yamall.core.SparseVector;
+import it.unimi.dsi.fastutil.ints.Int2DoubleMap;
+
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-
-import com.yahoo.labs.yamall.core.Instance;
-import com.yahoo.labs.yamall.core.SparseVector;
-
-import it.unimi.dsi.fastutil.ints.Int2DoubleMap;
 
 /**
  * created by acutkosky on 7/20/2017
@@ -191,21 +190,21 @@ public class PerCoordinateFreeRex implements Learner {
 
     private void writeObject(ObjectOutputStream o) throws IOException {
         o.defaultWriteObject();
-        o.writeObject(SparseVector.dense2Sparse(maxGrads));
-        o.writeObject(SparseVector.dense2Sparse(scaling));
-        o.writeObject(SparseVector.dense2Sparse(sumGrads));
-        o.writeObject(SparseVector.dense2Sparse(inverseEtaSq));
-        o.writeObject(SparseVector.dense2Sparse(center));
+        //o.writeObject(SparseVector.dense2Sparse(maxGrads));
+        //o.writeObject(SparseVector.dense2Sparse(scaling));
+        //o.writeObject(SparseVector.dense2Sparse(sumGrads));
+        //o.writeObject(SparseVector.dense2Sparse(inverseEtaSq));
+        //o.writeObject(SparseVector.dense2Sparse(center));
         o.writeObject(SparseVector.dense2Sparse(w));
     }
 
     private void readObject(ObjectInputStream o) throws IOException, ClassNotFoundException {
         o.defaultReadObject();
-        maxGrads = ((SparseVector) o.readObject()).toDenseVector(size_hash);
-        scaling = ((SparseVector) o.readObject()).toDenseVector(size_hash);
-        sumGrads = ((SparseVector) o.readObject()).toDenseVector(size_hash);
-        inverseEtaSq = ((SparseVector) o.readObject()).toDenseVector(size_hash);
-        center = ((SparseVector) o.readObject()).toDenseVector(size_hash);
+        //maxGrads = ((SparseVector) o.readObject()).toDenseVector(size_hash);
+        //scaling = ((SparseVector) o.readObject()).toDenseVector(size_hash);
+        //sumGrads = ((SparseVector) o.readObject()).toDenseVector(size_hash);
+        //inverseEtaSq = ((SparseVector) o.readObject()).toDenseVector(size_hash);
+        //center = ((SparseVector) o.readObject()).toDenseVector(size_hash);
         w = ((SparseVector) o.readObject()).toDenseVector(size_hash);
     }
 
