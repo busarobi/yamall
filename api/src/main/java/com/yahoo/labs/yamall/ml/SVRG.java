@@ -77,7 +77,7 @@ public class SVRG implements Learner {
 
         double pred = predict(sample);
 
-        final double grad = -lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
+        final double grad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
 
         if (Math.abs(grad) > 1e-8) {
             sample.getVector().addScaledSparseVectorToDenseVector(Gbatch, grad);
@@ -111,7 +111,7 @@ public class SVRG implements Learner {
         for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
             int key = entry.getIntKey();
             int missed_steps = gradStep - last_updated[key] - 1;
-            w[key] -= missed_steps * Gbatch[key] * eta;
+            w[key] += missed_steps * Gbatch[key] * eta;
             last_updated[key] = gradStep;
         }
 
@@ -120,7 +120,7 @@ public class SVRG implements Learner {
 
         final double grad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
         final double grad_prev = lossFnc.negativeGradient(pred_prev, sample.getLabel(), sample.getWeight());
-        final double grad_diff = grad_prev - grad;
+        final double grad_diff = grad - grad_prev;
 
         
         if (Math.abs(grad) > 1e-8) {

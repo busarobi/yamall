@@ -182,6 +182,15 @@ public class CompareLearners extends Thread {
 
             learner = new SGD(bitsHash);
             learner.setLearningRate(learningRate);
+        } else if ( this.method .compareToIgnoreCase("SOLO") == 0) {
+            double learningRate = Double.parseDouble(this.properties.getProperty("solo_lr", "0.01"));
+
+            this.postFix = String.format("lr_%f_", learningRate) + this.postFix;
+
+            System.out.println( "SOLO learning rate: " + learningRate);
+
+            learner = new PerCoordinateSOLO(bitsHash);
+            learner.setLearningRate(learningRate);
         } else if ( this.method .compareToIgnoreCase("MB_SGD") == 0) {
             MiniBatchSGD mbsgd = new MiniBatchSGD(bitsHash);
 
@@ -229,6 +238,12 @@ public class CompareLearners extends Thread {
             train = new DataGeneratorNormal(trainSize, dim, sparsity);
             test = train.copy();
             ((DataGeneratorNormal) test).setNum(testSize);
+        } else if (dataType.compareToIgnoreCase("file") == 0) {
+            String trainFile = properties.getProperty("train_file");
+            train = new DataGeneratorFromFile(trainFile);
+
+            String testFile = properties.getProperty("test_file");
+            test = new DataGeneratorFromFile(testFile);
         }
 
         System.out.println( "Train size: " + trainSize );

@@ -17,6 +17,7 @@ public class DataGeneratorFromFile implements DataGenerator {
         try {
             FileInputStream fstream = new FileInputStream(this.fname);
             br = new BufferedReader(new InputStreamReader(fstream));
+            System.out.printf( "Open file: %s\n", this.fname);
         } catch (IOException e ){
             System.out.println(e.getMessage());
         }

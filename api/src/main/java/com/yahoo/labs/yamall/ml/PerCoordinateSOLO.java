@@ -3,14 +3,13 @@
 // Please see LICENSE file in the project root for terms.
 package com.yahoo.labs.yamall.ml;
 
+import com.yahoo.labs.yamall.core.Instance;
+import com.yahoo.labs.yamall.core.SparseVector;
+import it.unimi.dsi.fastutil.ints.Int2DoubleMap;
+
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-
-import com.yahoo.labs.yamall.core.Instance;
-import com.yahoo.labs.yamall.core.SparseVector;
-
-import it.unimi.dsi.fastutil.ints.Int2DoubleMap;
 
 @SuppressWarnings("serial")
 public class PerCoordinateSOLO implements Learner {
@@ -58,7 +57,8 @@ public class PerCoordinateSOLO implements Learner {
             sumSqGrads_i = sumSqGrads_i + negativeGradSquared * x_i * x_i;
             sumSqGrads[key] = sumSqGrads_i;
 
-            w[key] = eta * theta_i / Math.sqrt(sumSqGrads_i);
+            if (sumSqGrads_i>1e-8)
+                w[key] = eta * theta_i / Math.sqrt(sumSqGrads_i);
         }
 
         return pred;
