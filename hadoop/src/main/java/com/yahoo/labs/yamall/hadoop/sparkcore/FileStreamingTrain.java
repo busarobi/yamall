@@ -1,13 +1,18 @@
 package com.yahoo.labs.yamall.hadoop.sparkcore;
 
 import com.yahoo.labs.yamall.ml.Learner;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.streaming.Durations;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.Serializable;
 
 /**
@@ -63,5 +68,28 @@ public class FileStreamingTrain implements Serializable {
 
         JavaStreamingContext ssc = new JavaStreamingContext(sparkContext, Durations.seconds(1));
         ssc.textFileStream(inputDir);
+
+        long clusterStartTime = System.currentTimeMillis();
+        FileSystem hdfs = FileSystem.get(sparkContext.hadoopConfiguration());
+
+        // Get a list of all the files in the inputPath directory. We will read these files one at a time
+        Path[] featureFilePaths = FileUtil.stat2Paths(hdfs.listStatus(new Path(inputDir)));
+
+
+        // Loop through the feature files
+        for (Path featureFile : featureFilePaths) {
+            System.out.println("----- Starting file " + featureFile + " -----");
+            //BinaryInputStream inputStream = new BinaryInputStream(new BZip2CompressorInputStream(hdfs.open(featureFile)));
+            BufferedReader br = new BufferedReader(new InputStreamReader(hdfs.open(featureFile)));
+            for(;;) { // forever
+                String line = br.readLine();
+
+            }
+        }
+        long clusteringRuntime = System.currentTimeMillis() - clusterStartTime;
+
+
+
+
     }
 }

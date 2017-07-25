@@ -201,7 +201,7 @@ public class SVRG implements Learner {
         backCounter--;
         if ( backCounter <= 0  ) {
             if (state == SVRG.GATHER_GRADIENT ){ // switch to update parameters
-                backCounter = step;
+                backCounter = (int) Math.sqrt((double)step);
                 normalizeBatchGradient();
                 state = SVRG.UPDATE_GRADIENT;
             } else if ( state == SVRG.UPDATE_GRADIENT ) { // switch to gather gradient
