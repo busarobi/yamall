@@ -25,7 +25,7 @@ public class CompareLearners extends Thread {
     protected Learner learner = null;
     protected Properties properties = null;
     public static int bitsHash = 22;
-    public static int evalPeriod = 1000;
+    public static int evalPeriod = 10000;
 
     public static double minPrediction = -50.0;
     public static double maxPrediction = 50.0;
@@ -190,6 +190,24 @@ public class CompareLearners extends Thread {
             //svrg.doAveraging();
 
             learner = svrg;
+        } else if ( this.method.compareToIgnoreCase("SVRG_FR") == 0) {
+            double learningRate = Double.parseDouble(this.properties.getProperty("svrg_fr_lr", "0.05"));
+            double regPar = Double.parseDouble(this.properties.getProperty("svrg_fr_reg", "0.0"));
+            int step = Integer.parseInt(this.properties.getProperty("svrg_fr_step", "500"));
+
+            this.postFix = String.format("lr_%f_reg_%f_step_%d_", learningRate, regPar, step) + this.postFix;
+
+            System.out.println( "SVRG_FR learning rate: " + learningRate);
+            System.out.println( "SVRG_FR regularization param: " + regPar);
+            System.out.println( "SVRG_FR step: " + step);
+
+            SVRG_FR svrg = new SVRG_FR(bitsHash);
+            svrg.setLearningRate(learningRate);
+            svrg.setRegularizationParameter(regPar);
+            svrg.setStep(step);
+            //svrg.doAveraging();
+
+            learner = svrg;
         } else if ( this.method .compareToIgnoreCase("SGD") == 0) {
             double learningRate = Double.parseDouble(this.properties.getProperty("sgd_lr", "1.0"));
 
@@ -270,7 +288,14 @@ public class CompareLearners extends Thread {
 
             String testFile = properties.getProperty("test_file");
             test = new DataGeneratorFromFile(testFile);
+        } else if (dataType.compareToIgnoreCase("gzfile") == 0) {
+            String trainFile = properties.getProperty("train_file");
+            train = new DataGeneratorFromZippedFile(trainFile);
+
+            String testFile = properties.getProperty("test_file");
+            test = new DataGeneratorFromZippedFile(testFile);
         }
+
 
         System.out.println( "Train size: " + trainSize );
         System.out.println( "Test file: " + testSize );
