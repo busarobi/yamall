@@ -27,7 +27,7 @@ public class StreamStat {
     public static class Extractor implements FlatMapFunction<String, String> {
 
         @Override
-        public Iterable<String> call(String s) {
+        public Iterator<String> call(String s) {
             ArrayList<String> array = new ArrayList<>();
             String[] tokens = s.split(" ");
             int numOfFeatures = 0;
@@ -49,7 +49,7 @@ public class StreamStat {
                 numOfFeatures++;
             }
             array.add( NUM_OF_FEATURES + Integer.toString(numOfFeatures));
-            return array;
+            return array.iterator();
         }
     }
 
@@ -200,7 +200,7 @@ public class StreamStat {
                 public Boolean call(Tuple2<Integer, String> x) { return (x._1() > 100000); }
             } );
 
-            sortedFilteredPairs.saveAsTextFile(featOutDir, GzipCodec.class);
+            sortedFilteredPairs.coalesce(5).saveAsTextFile(featOutDir, GzipCodec.class);
             //sortedFilteredPairs.saveAsTextFile(featOutDir);
 
         }
@@ -251,7 +251,7 @@ public class StreamStat {
                 // line is not visible here.
 
 
-                Iterator<String> it = cl.call(line).iterator();
+                Iterator<String> it = cl.call(line);
                 while (it.hasNext()) {
                     System.out.println(it.next());
                 }

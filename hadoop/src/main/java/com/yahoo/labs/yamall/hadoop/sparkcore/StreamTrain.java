@@ -14,7 +14,6 @@ import org.apache.spark.api.java.function.Function;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Iterator;
 
 /**
  * Created by busafekete on 7/21/17.
@@ -43,12 +42,13 @@ public class StreamTrain {
         protected String logFile = "";
 
         public static int bitsHash = 22;
-        public long N = 0;
+//        public long N = 0;
         StringBuilder strb = new StringBuilder("");
 
         protected int mainloops = 10;
         protected int batchsize = 10000;
         protected int testsize = 1000;
+        protected int maxTake = 100000;
 
         protected String method = null;
         protected Learner learner = null;
@@ -85,7 +85,7 @@ public class StreamTrain {
 
         public String getReport() {
             double trainLoss = cumLoss / (double) numSamples;
-            String line = String.format("Train size, %d,Train loss, %f\n\n", numSamples, trainLoss );
+            String line = String.format("Train size, %d,Train loss, %f\n", numSamples, trainLoss );
             return line;
         }
 
@@ -96,10 +96,10 @@ public class StreamTrain {
             JavaRDD<String> input = sparkContext.textFile(inputDir);
 
             // compute lines
-            N = input.count();
-            double samplingfraction = (double) batchsize / (double) N;
-            double samplingfractiontest = (double) testsize / (double) N;
-            strb.append( String.format("Sampling fraction: %f\n", samplingfraction ) );
+//            N = input.count();
+//            double samplingfraction = (double) batchsize / (double) N;
+//            double samplingfractiontest = (double) testsize / (double) N;
+//            strb.append( String.format("Sampling fraction: %f\n", samplingfraction ) );
 
             // create learner
             setLearner();
@@ -109,49 +109,76 @@ public class StreamTrain {
 
             for( int maini = 0; maini < this.mainloops; maini++){
                 // train
-                JavaRDD<Instance> batch = data.sample(false,samplingfraction);
-                strb.append( "Fraction: " + batch.count() + "\n");
-                Iterator<Instance> batchIter = batch.toLocalIterator();
+                trainStep(data);
 
-                while(batchIter.hasNext()){
-                    Instance instance = batchIter.next();
-                    double score = learner.update(instance);
-                    score = Math.min(Math.max(score, minPrediction), maxPrediction);
-                    cumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
-                    numSamples++;
-                }
-
-                strb.append(getReport());
+                // save model
                 String modelFileName = String.format( "model_%d", maini );
                 saveModel(this.outputDir, modelFileName );
 
                 // test
-                JavaRDD<Instance> batchtest = data.sample(false,samplingfractiontest);
-                strb.append( "Fraction (test): " + batchtest.count() + "\n");
-                Iterator<Instance> batchIterTest = batch.toLocalIterator();
+                testStep(data);
 
-                double testCumLoss = 0.0;
-                int testNum = 0;
-                while(batchIterTest.hasNext()){
-                    Instance instance = batchIterTest.next();
+                this.saveLog();
+            }
+
+        }
+        protected void testStep(JavaRDD<Instance> data){
+            double testCumLoss = 0.0;
+            int testNum = 0;
+
+            int divtest = testsize / maxTake;
+            int remtest = testsize % maxTake;
+
+            for( int inneri = 0; inneri < divtest; inneri++ ) {
+                for (Instance instance : data.take(maxTake)) {
+                    //for(Instance instance : batchtest.collect()){
+                    //Instance instance = batchIterTest.next();
                     double score = learner.predict(instance);
                     score = Math.min(Math.max(score, minPrediction), maxPrediction);
 
                     testCumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
                     testNum++;
                 }
-
-                double testLoss = testCumLoss / (double) testNum;
-                String tmpline = String.format("Test size, %d,Test loss, %f\n", testNum, testLoss );
-                strb.append(tmpline);
-
-
-                this.saveLog();
             }
+            for (Instance instance : data.take(remtest)) {
+                //for(Instance instance : batchtest.collect()){
+                //Instance instance = batchIterTest.next();
+                double score = learner.predict(instance);
+                score = Math.min(Math.max(score, minPrediction), maxPrediction);
+
+                testCumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
+                testNum++;
+            }
+
+            double testLoss = testCumLoss / (double) testNum;
+            String tmpline = String.format("Test size, %d,Test loss, %f\n", testNum, testLoss );
+            strb.append(tmpline);
 
         }
 
-        public void saveModel( String dir, String fname ) throws IOException {
+        protected void trainStep(JavaRDD<Instance> data){
+            //for(Instance instance : batch.collect()){
+            int div = batchsize / maxTake;
+            int rem = batchsize % maxTake;
+            for( int inneri = 0; inneri < div; inneri++ ) {
+                for (Instance instance : data.take(maxTake)) {
+                    double score = learner.update(instance);
+                    score = Math.min(Math.max(score, minPrediction), maxPrediction);
+                    cumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
+                    numSamples++;
+                }
+            }
+            for (Instance instance : data.take(rem)) {
+                double score = learner.update(instance);
+                score = Math.min(Math.max(score, minPrediction), maxPrediction);
+                cumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
+                numSamples++;
+            }
+
+            strb.append(getReport());
+        }
+
+        protected void saveModel( String dir, String fname ) throws IOException {
             FileDeleter.delete(new File(dir + fname));
             IOLearner.saveLearner(learner, fname);
 
