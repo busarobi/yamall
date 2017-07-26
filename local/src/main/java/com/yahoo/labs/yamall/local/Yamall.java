@@ -3,53 +3,18 @@
 // Please see LICENSE file in the project root for terms.
 package com.yahoo.labs.yamall.local;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.OutputStreamWriter;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.concurrent.TimeUnit;
-
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
-
 import com.yahoo.labs.yamall.core.Instance;
-import com.yahoo.labs.yamall.ml.AbsLoss;
-import com.yahoo.labs.yamall.ml.COCOB;
-import com.yahoo.labs.yamall.ml.HingeLoss;
-import com.yahoo.labs.yamall.ml.IOLearner;
-import com.yahoo.labs.yamall.ml.IdentityLinkFunction;
-import com.yahoo.labs.yamall.ml.KT;
-import com.yahoo.labs.yamall.ml.Learner;
-import com.yahoo.labs.yamall.ml.LinkFunction;
-import com.yahoo.labs.yamall.ml.LogisticLinkFunction;
-import com.yahoo.labs.yamall.ml.LogisticLoss;
-import com.yahoo.labs.yamall.ml.Loss;
-import com.yahoo.labs.yamall.ml.PerCoordinateCOCOB;
-import com.yahoo.labs.yamall.ml.PerCoordinateKT;
-import com.yahoo.labs.yamall.ml.PerCoordinatePiSTOL;
-import com.yahoo.labs.yamall.ml.PerCoordinateSOLO;
-import com.yahoo.labs.yamall.ml.SGD_FM;
-import com.yahoo.labs.yamall.ml.SGD_VW;
-import com.yahoo.labs.yamall.ml.SOLO;
-import com.yahoo.labs.yamall.ml.SquareLoss;
+import com.yahoo.labs.yamall.ml.*;
 import com.yahoo.labs.yamall.parser.InstanceParser;
 import com.yahoo.labs.yamall.parser.LIBSVMParser;
 import com.yahoo.labs.yamall.parser.TSVParser;
 import com.yahoo.labs.yamall.parser.VWParser;
+import org.apache.commons.cli.*;
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.concurrent.TimeUnit;
 
 public class Yamall {
 
@@ -101,6 +66,8 @@ public class Yamall {
                 .desc("(EXPERIMENTAL) uses Per Coordinate COCOB optimizer").build());
         options.addOption(Option.builder().hasArg(false).required(false).longOpt("cocob")
                 .desc("(EXPERIMENTAL) uses COCOB optimizer").build());
+        options.addOption(Option.builder().hasArg(false).required(false).longOpt("svrg")
+                .desc("(EXPERIMENTAL) uses SVRG optimizer").build());
         options.addOption(Option.builder().hasArg(false).required(false).longOpt("fm")
                 .desc("Factorization Machine").build());
         options.addOption(Option.builder("f").hasArg(true).required(false).desc("final regressor to save")
@@ -266,6 +233,9 @@ public class Yamall {
             }
             else if (cmd.hasOption("fm")) {
             	learner = new SGD_FM(bitsHash, fmNumberFactors);
+            }
+            else if (cmd.hasOption("svrg")) {
+                learner = new SVRG(bitsHash);
             }
             else
                 learner = new SGD_VW(bitsHash);

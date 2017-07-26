@@ -3,12 +3,11 @@
 // Please see LICENSE file in the project root for terms.
 package com.yahoo.labs.yamall.parser;
 
-import java.util.HashMap;
-
 import com.yahoo.labs.yamall.core.Instance;
 import com.yahoo.labs.yamall.util.MurmurHash3;
-
 import it.unimi.dsi.fastutil.chars.Char2BooleanOpenHashMap;
+
+import java.util.HashMap;
 
 /**
  * Parser of VW Format strings
@@ -36,7 +35,7 @@ import it.unimi.dsi.fastutil.chars.Char2BooleanOpenHashMap;
  * @author Francesco Orabona
  * @version 1.0
  */
-public class VWParser implements InstanceParser {
+public class VWParser implements InstanceParser, java.io.Serializable {
 
     private int constIndex = 0;
     private int bits;
