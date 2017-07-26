@@ -5,33 +5,35 @@ import com.yahoo.labs.yamall.ml.*;
 import com.yahoo.labs.yamall.parser.VWParser;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.Function;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.Serializable;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.zip.GZIPInputStream;
 
 /**
  * Created by busafekete on 7/21/17.
  */
 public class StreamTrain {
 
-    public static class Extractor implements Function<String, Instance> {
-        VWParser vwparser = null;
-        public Extractor( int bithash ){
-            vwparser = new VWParser(bithash, null, false);
-        }
-
-        @Override
-        public Instance call(String line) throws Exception {
-            Instance sample = vwparser.parse(line);
-            return sample;
-        }
-    }
+//    public static class Extractor implements Function<String, Instance> {
+//        VWParser vwparser = null;
+//        public Extractor( int bithash ){
+//            vwparser = new VWParser(bithash, null, false);
+//        }
+//
+//        @Override
+//        public Instance call(String line) throws Exception {
+//            Instance sample = vwparser.parse(line);
+//            return sample;
+//        }
+//    }
 
 
 
@@ -58,7 +60,7 @@ public class StreamTrain {
 
         protected double cumLoss = 0.0;
         protected long numSamples = 0;
-
+        public static int evalPeriod = 5000000;
 
         public SparkLearner() {
             SparkConf sparkConf = new SparkConf().setAppName("spark yamall (training)");
@@ -66,6 +68,7 @@ public class StreamTrain {
             this.outputDir = sparkConf.get("spark.myapp.outdir");
             this.inputDir = sparkConf.get("spark.myapp.input");
 
+            this.evalPeriod = Integer.parseInt(sparkConf.get("spark.myapp.evalperiod", "5000000"));
             this.mainloops = Integer.parseInt(sparkConf.get("spark.myapp.mainloops", "10"));
             this.batchsize = Integer.parseInt(sparkConf.get("spark.myapp.batchsize", "10000"));
             this.testsize = Integer.parseInt(sparkConf.get("spark.myapp.testsize", "1000"));
@@ -74,6 +77,7 @@ public class StreamTrain {
 
             strb.append("Input: " + this.inputDir + "\n");
             strb.append("Output: " + this.outputDir + "\n");
+            strb.append("eval period: " + this.evalPeriod + "\n");
             strb.append("main loops: " + this.mainloops + "\n");
             strb.append("batch size: " + this.batchsize + "\n");
             strb.append("test size: " + this.testsize + "\n");
@@ -93,8 +97,9 @@ public class StreamTrain {
         public void train() throws IOException {
             SparkConf sparkConf = new SparkConf().setAppName("spark yamall (training)");
             JavaSparkContext sparkContext = new JavaSparkContext(sparkConf);
-            JavaRDD<String> input = sparkContext.textFile(inputDir);
+            //JavaRDD<String> input = sparkContext.textFile(inputDir);
 
+            VWParser vwparser = new VWParser(bitsHash, null, false);
             // compute lines
 //            N = input.count();
 //            double samplingfraction = (double) batchsize / (double) N;
@@ -103,25 +108,137 @@ public class StreamTrain {
 
             // create learner
             setLearner();
+            long clusterStartTime = System.currentTimeMillis();
+            FileSystem hdfs = FileSystem.get(sparkContext.hadoopConfiguration());
 
-            JavaRDD<Instance> data = input.map(new Extractor(bitsHash));
-            this.saveLog();
+            // Get a list of all the files in the inputPath directory. We will read these files one at a time
+            //the second boolean parameter here sets the recursion to true
+            ArrayList<Path> featureFilePaths = new ArrayList<>();
+            RemoteIterator<LocatedFileStatus> fileStatusListIterator = hdfs.listFiles(
+                    new Path(this.inputDir ), true);
 
-            for( int maini = 0; maini < this.mainloops; maini++){
-                // train
-                trainStep(data);
-
-                // save model
-                String modelFileName = String.format( "model_%d", maini );
-                saveModel(this.outputDir, modelFileName );
-
-                // test
-                testStep(data);
-
-                this.saveLog();
+            while(fileStatusListIterator.hasNext()){
+                LocatedFileStatus fileStatus = fileStatusListIterator.next();
+                String fileName = fileStatus.getPath().getName();
+                if ( fileName.contains(".gz") || fileName.contains(".txt") )
+                    featureFilePaths.add(fileStatus.getPath());
             }
 
+            Collections.shuffle(featureFilePaths);
+
+            strb.append("Number of files: " + featureFilePaths.size() + "\n");
+            ArrayList<Path> featureFilePathsTest = new ArrayList<>();
+            for(int i =0; i < 1; i++ ){
+                featureFilePathsTest.add(featureFilePaths.remove(featureFilePaths.size()-1));
+            }
+
+
+//            JavaRDD<Instance> data = input.map(new Extractor(bitsHash));
+//            this.saveLog();
+
+//            for( int maini = 0; maini < this.mainloops; maini++){
+//                // train
+//                trainStep(data);
+//
+//                // save model
+//                String modelFileName = String.format( "model_%d", maini );
+//                saveModel(this.outputDir, modelFileName );
+//
+//                // test
+//                testStep(data);
+//
+//                this.saveLog();
+//            }
+
+
+            for (Path featureFile : featureFilePaths) {
+                System.out.println("----- Starting file " + featureFile + " -----");
+                strb.append("----- Starting file " + featureFile + " -----\n");
+                saveLog();
+                BufferedReader br = null;
+                if (featureFile.getName().contains(".gz"))
+                    br = new BufferedReader(new InputStreamReader(new GZIPInputStream(hdfs.open(featureFile))));
+                else
+                    br = new BufferedReader(new InputStreamReader(hdfs.open(featureFile)));
+
+                for(;;) { // forever
+                    String strLine = br.readLine();
+
+                    Instance sample;
+
+
+                    if (strLine != null) {
+                        sample = vwparser.parse(strLine);
+                    } else
+                        break;
+
+                    double score = learner.update(sample);
+                    score = Math.min(Math.max(score, minPrediction), maxPrediction);
+
+                    cumLoss += learner.getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
+
+                    numSamples++;
+
+                    if (numSamples % evalPeriod == 0 ){
+                        double trainLoss = cumLoss / (double) numSamples;
+                        double testLoss = eval(featureFilePathsTest, hdfs, vwparser);
+                        long clusteringRuntime = System.currentTimeMillis() - clusterStartTime;
+                        double elapsedTime = clusteringRuntime/1000.0;
+                        double elapsedTimeInhours = elapsedTime/3600.0;
+
+                        String line = String.format("%d %f %f %f\n", numSamples, trainLoss, testLoss, elapsedTimeInhours );
+                        strb.append(line );
+                        System.out.print(this.method + " " + line);
+                        this.saveLog();
+                    }
+
+                    if (numSamples % 5000000 == 0 ) {
+                        String modelFile = "model_" + numSamples;
+                        saveModel(this.outputDir, modelFile);
+                    }
+                }
+            }
+
+
+
         }
+
+        public double eval( ArrayList<Path> files, FileSystem hdfs, VWParser vwparser ) throws  IOException {
+            int numSamples = 0;
+            double score;
+            double cumLoss = 0.0;
+
+            for (Path featureFile : files) {
+                BufferedReader br = null;
+                if (featureFile.getName().contains(".gz"))
+                    br = new BufferedReader(new InputStreamReader(new GZIPInputStream(hdfs.open(featureFile))));
+                else
+                    br = new BufferedReader(new InputStreamReader(hdfs.open(featureFile)));
+
+                for(;;) { // forever
+                    String strLine = br.readLine();
+
+                    Instance sample;
+
+                    if (strLine != null) {
+                        sample = vwparser.parse(strLine);
+                    } else
+                        break;
+
+
+                    score = learner.predict(sample);
+                    score = Math.min(Math.max(score, minPrediction), maxPrediction);
+
+                    cumLoss += learner.getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
+
+                    numSamples++;
+                }
+            }
+
+            return cumLoss / (double) numSamples;
+        }
+
+
         protected void testStep(JavaRDD<Instance> data){
             double testCumLoss = 0.0;
             int testNum = 0;

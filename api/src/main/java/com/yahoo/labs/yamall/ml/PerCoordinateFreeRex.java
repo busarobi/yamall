@@ -25,7 +25,7 @@ public class PerCoordinateFreeRex implements Learner {
     private transient double[] w;
 
     private boolean use_scaling = false;
-    private double k = 0.45; // sqrt(1/5)
+    private double k_inv = 0.45; // sqrt(1/5)
     private Loss lossFnc;
     public double iter = 0;
     private int size_hash = 0;
@@ -40,8 +40,9 @@ public class PerCoordinateFreeRex implements Learner {
         scaling = new double[size_hash];
         maxGrads = new double[size_hash];
 
-        center = new double[size_hash]; //default 0, but allows for FTRL with arbitrary centering.
         w = new double[size_hash];
+        center = new double[size_hash]; //default 0, but allows for FTRL with arbitrary centering.
+
     }
 
     public void setCenter(double[] center) {
@@ -69,8 +70,8 @@ public class PerCoordinateFreeRex implements Learner {
         this.lossFnc = lossFnc;
     }
 
-    public void setLearningRate(double k) {
-        this.k = k;
+    public void setLearningRate(double k_inv) {
+        this.k_inv = k_inv;
     }
 
     public double update(Instance sample) {
@@ -102,7 +103,7 @@ public class PerCoordinateFreeRex implements Learner {
                 sumGrads[key] = sumGrads_i;
                 scaling[key] = scaling_i;
                 inverseEtaSq[key] = inverseEtaSq_i;
-                w[key] = (Math.signum(sumGrads_i)) * (Math.exp(k * Math.abs(sumGrads_i) /  Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
+                w[key] = (Math.signum(sumGrads_i)) * (Math.exp(k_inv * Math.abs(sumGrads_i) /  Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
 
 
                 if (use_scaling) { //In practice I suspect this is a bad trade-off
@@ -138,19 +139,24 @@ public class PerCoordinateFreeRex implements Learner {
 
     public void batch_update_coord(int key, double negativeGrad, int missed_steps) {
         // useful for SVRG lazy update.
-        double sumGrads_i = sumGrads[key];
-        double maxGrads_i = maxGrads[key];
-        double inverseEtaSq_i = inverseEtaSq[key];
-        double scaling_i = scaling[key];
-        sumGrads_i += missed_steps * negativeGrad;
-        maxGrads_i = Math.max(maxGrads_i, Math.abs(negativeGrad));
-        inverseEtaSq_i = Math.max(inverseEtaSq_i + 2 * missed_steps * negativeGrad * negativeGrad, Math.abs(sumGrads_i) * maxGrads_i);
-        scaling_i = Math.max(scaling_i, inverseEtaSq_i / (maxGrads_i * maxGrads_i));
-        maxGrads[key] = maxGrads_i;
-        sumGrads[key] = sumGrads_i;
-        scaling[key] = scaling_i;
-        inverseEtaSq[key] = inverseEtaSq_i;
-        w[key] = (Math.signum(sumGrads_i)) * (Math.exp(Math.abs(sumGrads_i) / (k * Math.sqrt(inverseEtaSq_i))) - 1.0) + center[key];
+        if (Math.abs(negativeGrad) > 1e-8 && missed_steps > 0) {
+            double sumGrads_i = sumGrads[key];
+            double maxGrads_i = maxGrads[key];
+            double inverseEtaSq_i = inverseEtaSq[key];
+            double scaling_i = scaling[key];
+            sumGrads_i += missed_steps * negativeGrad;
+            maxGrads_i = Math.max(maxGrads_i, Math.abs(negativeGrad));
+            inverseEtaSq_i = Math.max(inverseEtaSq_i + 2 * missed_steps * negativeGrad * negativeGrad, Math.abs(sumGrads_i) * maxGrads_i);
+            scaling_i = Math.max(scaling_i, inverseEtaSq_i / (maxGrads_i * maxGrads_i));
+            maxGrads[key] = maxGrads_i;
+            sumGrads[key] = sumGrads_i;
+            scaling[key] = scaling_i;
+            inverseEtaSq[key] = inverseEtaSq_i;
+            w[key] = (Math.signum(sumGrads_i)) * ( Math.exp( k_inv *Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
+            if (use_scaling) { //In practice I suspect this is a bad trade-off
+                w[key] /= scaling_i;
+            }
+        }
     }
 
     public void updateFromNegativeGrad(SparseVector negativeGrad) {
@@ -175,7 +181,10 @@ public class PerCoordinateFreeRex implements Learner {
                 sumGrads[key] = sumGrads_i;
                 scaling[key] = scaling_i;
                 inverseEtaSq[key] = inverseEtaSq_i;
-                w[key] = (Math.signum(sumGrads_i)) * (Math.exp(Math.abs(sumGrads_i) / (k * Math.sqrt(inverseEtaSq_i))) - 1.0) + center[key];
+                w[key] = (Math.signum(sumGrads_i)) * ( Math.exp( k_inv * Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
+                if (use_scaling) { //In practice I suspect this is a bad trade-off
+                    w[key] /= scaling_i;
+                }
             }
         }
 
@@ -183,7 +192,7 @@ public class PerCoordinateFreeRex implements Learner {
 
     public String toString() {
         String tmp = "Using FreeRex optimizer\n";
-        tmp = tmp + "Initial learning rate = " + k + "\n";
+        tmp = tmp + "learning rate = " + k_inv + "\n";
         tmp = tmp + "Loss function = " + getLoss().toString();
         return tmp;
     }
