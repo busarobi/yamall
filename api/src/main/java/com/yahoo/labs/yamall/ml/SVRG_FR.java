@@ -50,8 +50,7 @@ public class SVRG_FR extends SVRG {
 
             double x_i = entry.getDoubleValue();
             double term = (x_i * grad_diff + Gbatch[key]);
-            // hacky solution, don't use x anymore
-            //entry.setValue(term);
+
             skeys[si] = key;
             svalues[si] = term;
             si++;
@@ -59,14 +58,17 @@ public class SVRG_FR extends SVRG {
             last_updated[key] = gradStep;
         }
 
-        freerex.updateFromNegativeGrad(new SparseVector(skeys,svalues));
+        freerex.updateFromNegativeGrad(new SparseVector(skeys, svalues));
         return pred;
     }
 
     protected void initGatherState() {
+        double wsum = freerex.getWeights().squaredL2Norm();
         for (int i = 0; i < size_hash; i++) {
             int missed_steps = gradStep - last_updated[i];
-            freerex.batch_update_coord( i, Gbatch[i], missed_steps);
+            if(missed_steps > 0) {
+                freerex.batch_update_coord(i, Gbatch[i], missed_steps);
+            }
             last_updated[i] = 0;
         }
 
