@@ -19,7 +19,7 @@ public class SVRG implements Learner {
 
     protected double eta = .01;
     protected int step = 500;
-    protected double lambda = .01;
+    protected double lambda = 0.0;
 
     protected int backCounter = 0;
     protected int gradStep = 0;
@@ -72,7 +72,7 @@ public class SVRG implements Learner {
         this.step = step;
     }
 
-    private double accumulateGradient( Instance sample ) {
+    public double accumulateGradient( Instance sample ) {
         gatherGradIter++;
 
         double pred = predict(sample);
