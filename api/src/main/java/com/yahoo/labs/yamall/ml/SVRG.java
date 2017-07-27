@@ -14,8 +14,8 @@ import java.io.ObjectOutputStream;
 public class SVRG implements Learner {
     private boolean averaging = false;
 
-    private static final int GATHER_GRADIENT = 1;
-    private static final int UPDATE_GRADIENT = 2;
+    protected static final int GATHER_GRADIENT = 1;
+    protected static final int UPDATE_GRADIENT = 2;
 
     protected double eta = .01;
     protected int step = 500;
@@ -38,7 +38,7 @@ public class SVRG implements Learner {
 
     protected int gatherGradIter = 0;
 
-    private int state = 2;
+    protected int state = 2;
 
     public SVRG(
             int bits) {
@@ -201,7 +201,8 @@ public class SVRG implements Learner {
         backCounter--;
         if ( backCounter <= 0  ) {
             if (state == SVRG.GATHER_GRADIENT ){ // switch to update parameters
-                backCounter = (int) Math.sqrt((double)step);
+                //backCounter = (int) Math.sqrt((double)step);
+                backCounter = (int) (step/10.0);
                 normalizeBatchGradient();
                 state = SVRG.UPDATE_GRADIENT;
             } else if ( state == SVRG.UPDATE_GRADIENT ) { // switch to gather gradient

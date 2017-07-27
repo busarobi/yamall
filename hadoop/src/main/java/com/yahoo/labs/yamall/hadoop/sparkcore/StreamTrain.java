@@ -9,7 +9,6 @@ import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.*;
@@ -44,13 +43,7 @@ public class StreamTrain {
         protected String logFile = "";
 
         public static int bitsHash = 22;
-//        public long N = 0;
         StringBuilder strb = new StringBuilder("");
-
-        protected int mainloops = 10;
-        protected int batchsize = 10000;
-        protected int testsize = 1000;
-        protected int maxTake = 100000;
 
         protected String method = null;
         protected Learner learner = null;
@@ -69,45 +62,29 @@ public class StreamTrain {
             this.inputDir = sparkConf.get("spark.myapp.input");
 
             this.evalPeriod = Integer.parseInt(sparkConf.get("spark.myapp.evalperiod", "5000000"));
-            this.mainloops = Integer.parseInt(sparkConf.get("spark.myapp.mainloops", "10"));
-            this.batchsize = Integer.parseInt(sparkConf.get("spark.myapp.batchsize", "10000"));
-            this.testsize = Integer.parseInt(sparkConf.get("spark.myapp.testsize", "1000"));
 
             this.logFile = this.outputDir + "log.txt";
 
-            strb.append("Input: " + this.inputDir + "\n");
-            strb.append("Output: " + this.outputDir + "\n");
-            strb.append("eval period: " + this.evalPeriod + "\n");
-            strb.append("main loops: " + this.mainloops + "\n");
-            strb.append("batch size: " + this.batchsize + "\n");
-            strb.append("test size: " + this.testsize + "\n");
+            strb.append("---Input: " + this.inputDir + "\n");
+            strb.append("---Output: " + this.outputDir + "\n");
+            strb.append("---eval period: " + this.evalPeriod + "\n");
         }
 
         protected void saveLog() throws IOException {
+            this.logFile = this.outputDir + "log_" + this.numSamples + "_.txt";
             ResultWriter.writeToHDFS(this.logFile, strb.toString());
-        }
-
-        public String getReport() {
-            double trainLoss = cumLoss / (double) numSamples;
-            String line = String.format("Train size, %d,Train loss, %f\n", numSamples, trainLoss );
-            return line;
         }
 
 
         public void train() throws IOException {
             SparkConf sparkConf = new SparkConf().setAppName("spark yamall (training)");
             JavaSparkContext sparkContext = new JavaSparkContext(sparkConf);
-            //JavaRDD<String> input = sparkContext.textFile(inputDir);
 
             VWParser vwparser = new VWParser(bitsHash, null, false);
-            // compute lines
-//            N = input.count();
-//            double samplingfraction = (double) batchsize / (double) N;
-//            double samplingfractiontest = (double) testsize / (double) N;
-//            strb.append( String.format("Sampling fraction: %f\n", samplingfraction ) );
 
             // create learner
             setLearner();
+
             long clusterStartTime = System.currentTimeMillis();
             FileSystem hdfs = FileSystem.get(sparkContext.hadoopConfiguration());
 
@@ -124,37 +101,20 @@ public class StreamTrain {
                     featureFilePaths.add(fileStatus.getPath());
             }
 
+            // pick some file for testing
             Collections.shuffle(featureFilePaths);
 
-            strb.append("Number of files: " + featureFilePaths.size() + "\n");
+            strb.append("---Number of files: " + featureFilePaths.size() + "\n");
             ArrayList<Path> featureFilePathsTest = new ArrayList<>();
-            for(int i =0; i < 1; i++ ){
+            for(int i =0; i < 3; i++ ){
                 featureFilePathsTest.add(featureFilePaths.remove(featureFilePaths.size()-1));
             }
-
-
-//            JavaRDD<Instance> data = input.map(new Extractor(bitsHash));
-//            this.saveLog();
-
-//            for( int maini = 0; maini < this.mainloops; maini++){
-//                // train
-//                trainStep(data);
-//
-//                // save model
-//                String modelFileName = String.format( "model_%d", maini );
-//                saveModel(this.outputDir, modelFileName );
-//
-//                // test
-//                testStep(data);
-//
-//                this.saveLog();
-//            }
 
 
             for (Path featureFile : featureFilePaths) {
                 System.out.println("----- Starting file " + featureFile + " -----");
                 strb.append("----- Starting file " + featureFile + " -----\n");
-                saveLog();
+
                 BufferedReader br = null;
                 if (featureFile.getName().contains(".gz"))
                     br = new BufferedReader(new InputStreamReader(new GZIPInputStream(hdfs.open(featureFile))));
@@ -186,16 +146,15 @@ public class StreamTrain {
                         double elapsedTime = clusteringRuntime/1000.0;
                         double elapsedTimeInhours = elapsedTime/3600.0;
 
-                        String line = String.format("%d %f %f %f\n", numSamples, trainLoss, testLoss, elapsedTimeInhours );
-                        strb.append(line );
+                        String line = String.format("%d %f %f %f\n", numSamples, trainLoss, testLoss, elapsedTimeInhours);
+                        strb.append(line);
                         System.out.print(this.method + " " + line);
                         this.saveLog();
-                    }
 
-                    if (numSamples % 5000000 == 0 ) {
                         String modelFile = "model_" + numSamples;
                         saveModel(this.outputDir, modelFile);
                     }
+
                 }
             }
 
@@ -238,63 +197,6 @@ public class StreamTrain {
             return cumLoss / (double) numSamples;
         }
 
-
-        protected void testStep(JavaRDD<Instance> data){
-            double testCumLoss = 0.0;
-            int testNum = 0;
-
-            int divtest = testsize / maxTake;
-            int remtest = testsize % maxTake;
-
-            for( int inneri = 0; inneri < divtest; inneri++ ) {
-                for (Instance instance : data.take(maxTake)) {
-                    //for(Instance instance : batchtest.collect()){
-                    //Instance instance = batchIterTest.next();
-                    double score = learner.predict(instance);
-                    score = Math.min(Math.max(score, minPrediction), maxPrediction);
-
-                    testCumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
-                    testNum++;
-                }
-            }
-            for (Instance instance : data.take(remtest)) {
-                //for(Instance instance : batchtest.collect()){
-                //Instance instance = batchIterTest.next();
-                double score = learner.predict(instance);
-                score = Math.min(Math.max(score, minPrediction), maxPrediction);
-
-                testCumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
-                testNum++;
-            }
-
-            double testLoss = testCumLoss / (double) testNum;
-            String tmpline = String.format("Test size, %d,Test loss, %f\n", testNum, testLoss );
-            strb.append(tmpline);
-
-        }
-
-        protected void trainStep(JavaRDD<Instance> data){
-            //for(Instance instance : batch.collect()){
-            int div = batchsize / maxTake;
-            int rem = batchsize % maxTake;
-            for( int inneri = 0; inneri < div; inneri++ ) {
-                for (Instance instance : data.take(maxTake)) {
-                    double score = learner.update(instance);
-                    score = Math.min(Math.max(score, minPrediction), maxPrediction);
-                    cumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
-                    numSamples++;
-                }
-            }
-            for (Instance instance : data.take(rem)) {
-                double score = learner.update(instance);
-                score = Math.min(Math.max(score, minPrediction), maxPrediction);
-                cumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
-                numSamples++;
-            }
-
-            strb.append(getReport());
-        }
-
         protected void saveModel( String dir, String fname ) throws IOException {
             FileDeleter.delete(new File(dir + fname));
             IOLearner.saveLearner(learner, fname);
@@ -304,7 +206,6 @@ public class StreamTrain {
             fileSystem.moveFromLocalFile(new Path(fname), new Path(dir));
 
         }
-
 
         public void setLearner(){
             SparkConf sparkConf = new SparkConf().setAppName("spark yamall (training)");
@@ -318,14 +219,14 @@ public class StreamTrain {
             System.out.println( "----> Method: " + this.method + "\n" );
 
             if ( this.method.compareToIgnoreCase("SGD_VW") == 0) {
-                strb.append( "SGD_VW learning rate: " + learningRate + "\n");
+                strb.append( "---SGD_VW learning rate: " + learningRate + "\n");
 
                 learner = new SGD_VW(bitsHash);
                 learner.setLearningRate(learningRate);
             } else if ( this.method.compareToIgnoreCase("SVRG") == 0) {
-                strb.append( "SVRG learning rate: " + learningRate + "\n");
-                strb.append( "SVRG regularization param: " + regPar + "\n");
-                strb.append( "SVRG step: " + step + "\n");
+                strb.append( "---SVRG learning rate: " + learningRate + "\n");
+                strb.append( "---SVRG regularization param: " + regPar + "\n");
+                strb.append( "---SVRG step: " + step + "\n");
 
                 SVRG svrg = new SVRG(bitsHash);
                 svrg.setLearningRate(learningRate);
@@ -334,10 +235,11 @@ public class StreamTrain {
                 //svrg.doAveraging();
 
                 learner = svrg;
+
             } else if ( this.method.compareToIgnoreCase("SVRG_ADA") == 0) {
-                strb.append( "SVRG_ADA learning rate: " + learningRate + "\n");
-                strb.append( "SVRG_ADA regularization param: " + regPar + "\n");
-                strb.append( "SVRG_ADA step: " + step + "\n");
+                strb.append("---SVRG_ADA learning rate: " + learningRate + "\n");
+                strb.append("---SVRG_ADA regularization param: " + regPar + "\n");
+                strb.append("---SVRG_ADA step: " + step + "\n");
 
                 SVRG_ADA svrg = new SVRG_ADA(bitsHash);
                 svrg.setLearningRate(learningRate);
@@ -346,27 +248,39 @@ public class StreamTrain {
                 //svrg.doAveraging();
 
                 learner = svrg;
-            } else if ( this.method .compareToIgnoreCase("SGD") == 0) {
-                strb.append( "SGD learning rate: " + learningRate + "\n");
+            } else if ( this.method.compareToIgnoreCase("SVRG_FR") == 0) {
+                    strb.append( "---SVRG_FR learning rate: " + learningRate + "\n");
+                    strb.append( "---SVRG_FR regularization param: " + regPar + "\n");
+                    strb.append( "---SVRG_FR step: " + step + "\n");
+
+                    SVRG_FR svrg = new SVRG_FR(bitsHash);
+                    svrg.setLearningRate(learningRate);
+                    svrg.setRegularizationParameter(regPar);
+                    svrg.setStep(step);
+                    //svrg.doAveraging();
+
+                    learner = svrg;
+                } else if ( this.method .compareToIgnoreCase("SGD") == 0) {
+                strb.append( "---SGD learning rate: " + learningRate + "\n");
 
                 learner = new SGD(bitsHash);
                 learner.setLearningRate(learningRate);
             } else if ( this.method .compareToIgnoreCase("FREE_REX") == 0) {
-                strb.append( "FREE REX learning rate: " + learningRate + "\n");
+                strb.append( "---FREE REX learning rate: " + learningRate + "\n");
 
                 learner = new PerCoordinateFreeRex(bitsHash);
                 learner.setLearningRate(learningRate);
             } else if ( this.method .compareToIgnoreCase("SOLO") == 0) {
-                strb.append( "SOLO learning rate: " + learningRate + "\n");
+                strb.append( "---SOLO learning rate: " + learningRate + "\n");
 
                 learner = new PerCoordinateSOLO(bitsHash);
                 learner.setLearningRate(learningRate);
             } else if ( this.method .compareToIgnoreCase("MB_SGD") == 0) {
                 MiniBatchSGD mbsgd = new MiniBatchSGD(bitsHash);
 
-                strb.append( "MB SGD learning rate: " + learningRate + "\n");
-                strb.append( "MB SGD regularization param: " + regPar + "\n");
-                strb.append( "MB SGD step: " + step + "\n");
+                strb.append( "---MB SGD learning rate: " + learningRate + "\n");
+                strb.append( "---MB SGD regularization param: " + regPar + "\n");
+                strb.append( "---MB SGD step: " + step + "\n");
 
                 mbsgd.setLearningRate(learningRate);
                 mbsgd.setRegularizationParameter(regPar);
