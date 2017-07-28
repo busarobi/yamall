@@ -125,6 +125,7 @@ public class DistTrain {
             public long gatherGradIter=0;
             public double cumLoss = 0.0;
             protected int bits = 0;
+            protected boolean normalizationFlag = false;
 
 //            BatchGradObject( BatchGradObject o ) {
 //                bits = o.bits;
@@ -157,6 +158,8 @@ public class DistTrain {
 
                 final double grad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
 
+                pred = Math.min(Math.max(pred, minPrediction), maxPrediction);
+
                 if (Math.abs(grad) > 1e-8) {
                     sample.getVector().addScaledSparseVectorToDenseVector(localGbatch, grad);
                 }
@@ -169,14 +172,35 @@ public class DistTrain {
             }
 
             public void aggregate(BatchGradObject obj2){
-                for (int i=0; i < size_hash; i++ ) localGbatch[i] += obj2.localGbatch[i];
-                gatherGradIter += obj2.gatherGradIter;
-                cumLoss += obj2.cumLoss;
+                System.out.println("Before Cum loss obj1: " + cumLoss);
+                System.out.println("Before Cum loss obj2: " + obj2.cumLoss);
+
+                this.normalizeBatchGradient();
+                obj2.normalizeBatchGradient();
+
+                System.out.println("After Cum loss obj1: " + cumLoss);
+                System.out.println("After Cum loss obj2: " + obj2.cumLoss);
+
+                double sum = (double) (gatherGradIter + obj2.gatherGradIter);
+                if (sum>0.0) {
+                    for (int i = 0; i < size_hash; i++)
+                        localGbatch[i] = (gatherGradIter * localGbatch[i] + obj2.gatherGradIter * obj2.localGbatch[i]) / sum;
+                    cumLoss = (gatherGradIter * cumLoss + obj2.gatherGradIter * obj2.cumLoss) / sum;
+                    gatherGradIter += obj2.gatherGradIter;
+                }
+
+                System.out.println("After aggregation Cum loss obj1: " + cumLoss);
+
             }
 
             protected void normalizeBatchGradient() {
-                for (int i=0; i < size_hash; i++ ) localGbatch[i] /= (double)gatherGradIter;
-                cumLoss /= (double) gatherGradIter;
+                if (normalizationFlag == false) {
+                    if (gatherGradIter>0) {
+                        for (int i = 0; i < size_hash; i++) localGbatch[i] /= (double) gatherGradIter;
+                        cumLoss /= (double) gatherGradIter;
+                        normalizationFlag = true;
+                    }
+                }
             }
             public double[] getGbatch(){ return localGbatch; }
 
@@ -324,7 +348,7 @@ public class DistTrain {
                 strb.append( line );
 
                 saveLog(0);
-
+//                int it = 0;
                 for(String strInstance : samples) {
                     //String strInstance = getLine();
                     //System.out.println(strInstance);
@@ -338,6 +362,18 @@ public class DistTrain {
                         score = learner.gradStep(instance);
                     }
                     score = Math.min(Math.max(score, minPrediction), maxPrediction);
+
+//                    it++;
+//                    int ind = checkIsInf(learner.getDenseWeights() );
+//                    if( ind >= 0 ){
+//                        line = "--- Infinite value in weight vector, iter " + it + " Index: " + ind + "\n";
+//                        line += strInstance + "\n";
+//                        line += instance.toString() + "\n";
+//                        strb.append(line);
+//                        saveLog(0);
+//                        System.exit(0);
+//                    }
+
 
                     cumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
                     numSamples++;
@@ -359,8 +395,25 @@ public class DistTrain {
 
                 // compute batch gradient
                 double[] prev_w = learner.getDenseWeights();
+
+                int ind = checkIsInf( prev_w);
+                if( ind >= 0 ){
+                    line = "--- Infinite value in weight vector \n";
+                    strb.append(line);
+                    saveLog(0);
+                    System.exit(0);
+                }
+
                 BatchGradObject batchgradient = subsamp.treeAggregate( new BatchGradObject(bitsHash, prev_w, vwparser), new SeqOp(), new CombOp(),11);
                 batchgradient.normalizeBatchGradient();
+
+                ind = checkIsInf( batchgradient.getGbatch());
+                if( ind >= 0 ){
+                    line = "--- Infinite value in batch grad vector \n";
+                    strb.append(line);
+                    saveLog(0);
+                    System.exit(0);
+                }
 
                 numSamples += batchgradient.getNum();
 
@@ -376,7 +429,7 @@ public class DistTrain {
 
                 line = String.format("%d %f %f %f\n", numSamples, trainLoss, batchgradient.cumLoss, elapsedTimeInhours);
                 strb.append(line);
-                System.out.print(this.method + " " + line);
+                System.out.print(line);
 
 
                 saveLog(0);
@@ -387,6 +440,17 @@ public class DistTrain {
 //            pairRDD.groupByKey();
 
             //pairRDD=pairRDD.partitionBy(new CustomPartitioner(iter+1));
+        }
+
+        protected int checkIsInf( double[] arr ){
+            int retVal = -1;
+            for(int i=0; i < arr.length; i++ ){
+                if (Double.isInfinite(arr[i])){
+                    retVal = i;
+                    break;
+                }
+            }
+            return retVal;
         }
 
         protected void saveModel( String dir, String fname ) throws IOException {

@@ -88,25 +88,32 @@ public class PerCoordinateFreeRex implements Learner {
                 int key = entry.getIntKey();
                 double maxGrads_i = maxGrads[key];
                 double sumGrads_i = sumGrads[key];
-                double scaling_i = scaling[key];
                 double inverseEtaSq_i = inverseEtaSq[key];
 
                 sumGrads_i += negativeGrad_i;
                 maxGrads_i = Math.max(maxGrads_i, Math.abs(negativeGrad_i));
 
                 //The max below makes the worst-case bounds a little better. I've never seen the second argument actually be bigger.
-                inverseEtaSq_i = Math.max(inverseEtaSq_i + 2 * negativeGrad_i * negativeGrad_i, Math.abs(sumGrads_i) * maxGrads_i);
-
-                scaling_i = Math.max(scaling_i, inverseEtaSq_i / (maxGrads_i * maxGrads_i));
+                inverseEtaSq_i = Math.max(inverseEtaSq_i + 2.0 * negativeGrad_i * negativeGrad_i, Math.abs(sumGrads_i) * maxGrads_i);
 
                 maxGrads[key] = maxGrads_i;
                 sumGrads[key] = sumGrads_i;
-                scaling[key] = scaling_i;
                 inverseEtaSq[key] = inverseEtaSq_i;
-                w[key] = (Math.signum(sumGrads_i)) * (Math.exp(k_inv * Math.abs(sumGrads_i) /  Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
 
+                if (inverseEtaSq_i>1e-7) {
+                    double update = (Math.signum(sumGrads_i)) * (Math.exp(k_inv * Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
+                    w[key] = update;
+//                    if (Double.isInfinite(update)){
+//                        System.out.printf( "key: %d\n", key);
+//                        System.out.printf( "inverseEtaSq_i: %f\n", inverseEtaSq_i );
+//                        System.out.printf( "sumGrads_i: %f\n", sumGrads_i );
+//                    }
+                }
 
                 if (use_scaling) { //In practice I suspect this is a bad trade-off
+                    double scaling_i = scaling[key];
+                    scaling_i = Math.max(scaling_i, inverseEtaSq_i / (maxGrads_i * maxGrads_i));
+                    scaling[key] = scaling_i;
                     w[key] /= scaling_i;
                 }
 
@@ -152,7 +159,8 @@ public class PerCoordinateFreeRex implements Learner {
             sumGrads[key] = sumGrads_i;
             scaling[key] = scaling_i;
             inverseEtaSq[key] = inverseEtaSq_i;
-            w[key] = (Math.signum(sumGrads_i)) * ( Math.exp( k_inv *Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
+            if (inverseEtaSq_i>1e-7)
+                w[key] = (Math.signum(sumGrads_i)) * ( Math.exp( k_inv *Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
             if (use_scaling) { //In practice I suspect this is a bad trade-off
                 w[key] /= scaling_i;
             }
@@ -181,7 +189,8 @@ public class PerCoordinateFreeRex implements Learner {
                 sumGrads[key] = sumGrads_i;
                 scaling[key] = scaling_i;
                 inverseEtaSq[key] = inverseEtaSq_i;
-                w[key] = (Math.signum(sumGrads_i)) * ( Math.exp( k_inv * Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
+                if (inverseEtaSq_i>1e-7)
+                    w[key] = (Math.signum(sumGrads_i)) * ( Math.exp( k_inv * Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
                 if (use_scaling) { //In practice I suspect this is a bad trade-off
                     w[key] /= scaling_i;
                 }

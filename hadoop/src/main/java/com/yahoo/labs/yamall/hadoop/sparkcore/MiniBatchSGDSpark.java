@@ -30,7 +30,7 @@ import java.util.Random;
 /**
  * Created by busafekete on 7/25/17.
  */
-public class MiniBatchSGD {
+public class MiniBatchSGDSpark {
     static class MiniBatchSGDRunner implements Serializable {
         protected String inputDir;
         protected String outputDir;
@@ -180,6 +180,7 @@ public class MiniBatchSGD {
                 Instance sample = vwparser.parse(sampleString);
 
                 double pred = predict(sample);
+
 
                 final double grad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
 
