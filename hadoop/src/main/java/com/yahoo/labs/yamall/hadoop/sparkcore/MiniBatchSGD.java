@@ -1,29 +1,37 @@
 package com.yahoo.labs.yamall.hadoop.sparkcore;
 
+/**
+ * Created by busafekete on 7/27/17.
+ */
+
 import com.yahoo.labs.yamall.core.Instance;
 import com.yahoo.labs.yamall.ml.IOLearner;
 import com.yahoo.labs.yamall.ml.LogisticLoss;
 import com.yahoo.labs.yamall.ml.Loss;
-import com.yahoo.labs.yamall.ml.SVRG_FR;
+import com.yahoo.labs.yamall.ml.SGD;
 import com.yahoo.labs.yamall.parser.VWParser;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.Partitioner;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.api.java.function.PairFunction;
+import scala.Tuple2;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.List;
+import java.util.Random;
+
 
 /**
  * Created by busafekete on 7/25/17.
  */
-public class DistTrain {
-    static class DistTrainRunner implements Serializable {
+public class MiniBatchSGD {
+    static class MiniBatchSGDRunner implements Serializable {
         protected String inputDir;
         protected String outputDir;
 
@@ -33,7 +41,7 @@ public class DistTrain {
         StringBuilder strb = new StringBuilder("");
 
         protected String method = null;
-        protected SVRG_FR learner = null;
+        protected MBSGD learner = null;
 
         public static double minPrediction = -50.0;
         public static double maxPrediction = 50.0;
@@ -42,9 +50,27 @@ public class DistTrain {
         protected long numSamples = 0;
         public static int iter = 100;
 
+        class MBSGD extends SGD {
+            public MBSGD(int bits) {
+                super(bits);
+            }
+
+            public void update( double[] batchGrad ){
+                iter++;
+                double mul = eta * (1.0 / Math.sqrt(iter));
+                for (int i=0; i < size_hash; i++ ) w[i] -= (mul * batchGrad[i]);
+            }
+
+            public double[] getDenseWeights() {
+                // useful for extracting w_prev in SVRG
+                return w;
+            }
+
+        }
+
         //FileSystem hdfs = null;
         //ArrayList<Path> featureFilePaths = null;
-        public DistTrainRunner() {
+        public MiniBatchSGDRunner() {
             SparkConf sparkConf = new SparkConf().setAppName("spark yamall (training)");
 
             this.outputDir = sparkConf.get("spark.myapp.outdir");
@@ -64,57 +90,57 @@ public class DistTrain {
             ResultWriter.writeToHDFS(this.logFile, strb.toString());
         }
 
-//        class CustomPartitioner extends Partitioner{
-//
-//            private int numParts;
-//
-//            public CustomPartitioner(int i) {
-//                numParts=i;
-//            }
-//
-//            @Override
-//            public int numPartitions()
-//            {
-//                return numParts;
-//            }
-//
-//            @Override
-//            public int getPartition(Object key){
-//
-//                //partition based on the first character of the key...you can have your logic here !!
-//                return ((String)key).charAt(0)%numParts;
-//
-//            }
-//
-//            @Override
-//            public boolean equals(Object obj){
-//                if(obj instanceof CustomPartitioner)
-//                {
-//                    CustomPartitioner partitionerObject = (CustomPartitioner)obj;
-//                    if(partitionerObject.numParts == this.numParts)
-//                        return true;
-//                }
-//
-//                return false;
-//            }
-//        }
-//
-//
-//
-//        class Extractor implements PairFunction<String,Integer,Instance> {
-//            Random r = new Random();
-//            protected int partition = 0;
-//            VWParser vwparser = null;
-//
-//            public Extractor(int hahsize, int partition){
-//                vwparser = new VWParser(hahsize, null, false);
-//            }
-//            @Override
-//            public Tuple2<Integer,Instance> call(String arg0) throws Exception {
-//                //return a tuple ,split[0] contains continent and split[1] contains country
-//                return new Tuple2<Integer,Instance>(r.nextInt(partition), vwparser.parse(arg0));
-//            }
-//        }
+        class CustomPartitioner extends Partitioner {
+
+            private int numParts;
+
+            public CustomPartitioner(int i) {
+                numParts=i;
+            }
+
+            @Override
+            public int numPartitions()
+            {
+                return numParts;
+            }
+
+            @Override
+            public int getPartition(Object key){
+
+                //partition based on the first character of the key...you can have your logic here !!
+                return ((String)key).charAt(0)%numParts;
+
+            }
+
+            @Override
+            public boolean equals(Object obj){
+                if(obj instanceof CustomPartitioner)
+                {
+                    CustomPartitioner partitionerObject = (CustomPartitioner)obj;
+                    if(partitionerObject.numParts == this.numParts)
+                        return true;
+                }
+
+                return false;
+            }
+        }
+
+
+
+        class Extractor implements PairFunction<String,Integer,Instance> {
+            Random r = new Random();
+            protected int partition = 0;
+            VWParser vwparser = null;
+
+            public Extractor(int hahsize, int partition){
+                vwparser = new VWParser(hahsize, null, false);
+            }
+            @Override
+            public Tuple2<Integer,Instance> call(String arg0) throws Exception {
+                //return a tuple ,split[0] contains continent and split[1] contains country
+                return new Tuple2<Integer,Instance>(r.nextInt(partition), vwparser.parse(arg0));
+            }
+        }
 
         class BatchGradObject implements Serializable {
             protected double[] localGbatch;
@@ -242,7 +268,7 @@ public class DistTrain {
             //System.out.println(line);
             //strb.append(line);
 
-            double fraction = 1.0 /(iter+1.0);
+            double fraction = 1.0 /((double)iter);
             System.out.println("--Fraction: " + fraction );
 
             //input.cache();
@@ -295,10 +321,10 @@ public class DistTrain {
             strb.append( "---SVRG_FR regularization param: " + regPar + "\n");
             strb.append( "---SVRG_FR step: " + stepPerGrad + "\n");
 
-            learner = new SVRG_FR(bitsHash);
+            learner = new MBSGD(bitsHash);
             learner.setLearningRate(learningRate);
-            learner.setRegularizationParameter(regPar);
-            learner.setStep(stepPerGrad);
+
+
             Loss lossFnc = new LogisticLoss();
             learner.setLoss(lossFnc);
 
@@ -314,43 +340,6 @@ public class DistTrain {
                 line = "---> Iter: " + i + "\n";
                 strb.append( line );
 
-                double samplingRatio = (stepPerGrad / (double) lineNumGrad);
-                line = "--- Inner sampling ratio: " + samplingRatio + "\n";
-                strb.append( line );
-
-                JavaRDD<String> s = subsampTrain.sample(false, samplingRatio);
-                List<String> samples = s.collect();
-                line = "--- Inner training size: " + samples.size() + "\n";
-                strb.append( line );
-
-                saveLog(0);
-
-                for(String strInstance : samples) {
-                    //String strInstance = getLine();
-                    //System.out.println(strInstance);
-                    Instance instance = vwparser.parse(strInstance);
-                    double score;
-
-
-                    if (i==0) {
-                        score = learner.freeRexUpdate(instance);
-                    } else {
-                        score = learner.gradStep(instance);
-                    }
-                    score = Math.min(Math.max(score, minPrediction), maxPrediction);
-
-                    cumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
-                    numSamples++;
-                    gradSteps++;
-                }
-
-                learner.initGatherState();
-                //
-                double trainLoss = cumLoss / (double) gradSteps;
-                //double testLoss = eval(subsampTest, vwparser);
-                //double testLoss = 0.0;
-                String modelFile = "model_" + i;
-                saveModel(this.outputDir, modelFile);
 
                 saveLog(0);
 
@@ -365,7 +354,7 @@ public class DistTrain {
                 numSamples += batchgradient.getNum();
 
                 // set Gbatch to learner
-                learner.setGBatch(batchgradient.getGbatch());
+                learner.update(batchgradient.getGbatch());
 
                 line = "--- Gbatch step: " + batchgradient.gatherGradIter + " Cum loss: " + batchgradient.cumLoss + "\n";
                 strb.append( line );
@@ -374,7 +363,7 @@ public class DistTrain {
                 double elapsedTime = clusteringRuntime/1000.0;
                 double elapsedTimeInhours = elapsedTime/3600.0;
 
-                line = String.format("%d %f %f %f\n", numSamples, trainLoss, batchgradient.cumLoss, elapsedTimeInhours);
+                line = String.format("%d %f %f %f\n", numSamples, 0.0, batchgradient.cumLoss, elapsedTimeInhours);
                 strb.append(line);
                 System.out.print(this.method + " " + line);
 
@@ -488,7 +477,7 @@ public class DistTrain {
 
 
     public static void main(String[] args) throws IOException {
-        DistTrainRunner sl = new DistTrainRunner();
+        MiniBatchSGDRunner sl = new MiniBatchSGDRunner();
         sl.train();
     }
 

@@ -58,7 +58,7 @@ public class PerCoordinateFreeRex implements Learner {
 
     public void reset() {
         for(int i=0; i< size_hash; i++) {
-            maxGrads[i] = 0;
+            //maxGrads[i] = 0;
             inverseEtaSq[i] = 0;
             sumGrads[i] = 0;
             scaling[i] = 0;

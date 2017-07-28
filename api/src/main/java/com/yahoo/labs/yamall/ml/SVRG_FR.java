@@ -135,6 +135,8 @@ public class SVRG_FR extends SVRG {
         for (int i=0; i < size_hash; i++ ) w_prev[i] = w_tmp[i];
         for (int i=0; i < size_hash; i++ ) Gbatch[i] = 0;
         gatherGradIter = 0;
+        this.freerex.setCenter(w_prev);
+        this.freerex.reset();
     }
 
     public double[] getDenseWeights() {

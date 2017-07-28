@@ -11,11 +11,11 @@ import java.io.ObjectOutputStream;
  * Created by busafekete on 7/11/17.
  */
 public class SGD implements Learner {
-    private double eta = .5;
-    private transient double[] w;
-    private Loss lossFnc;
-    private double iter = 0;
-    private int size_hash = 0;
+    protected double eta = .5;
+    protected double[] w;
+    protected Loss lossFnc;
+    protected double iter = 0;
+    protected int size_hash = 0;
 
     public SGD(
             int bits) {
