@@ -38,7 +38,7 @@ public class SVRG_FR extends SVRG {
 
         for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
             int key = entry.getIntKey();
-            int missed_steps = gradStep - last_updated[key] - 2;
+            int missed_steps = gradStep - last_updated[key] - 1;
 
             if (missed_steps > 0) {
                 freerex.batch_update_coord( key, Gbatch[key], missed_steps);
@@ -135,6 +135,8 @@ public class SVRG_FR extends SVRG {
         for (int i=0; i < size_hash; i++ ) w_prev[i] = w_tmp[i];
         for (int i=0; i < size_hash; i++ ) Gbatch[i] = 0;
         gatherGradIter = 0;
+
+        // centering
         this.freerex.setCenter(w_prev);
         this.freerex.reset();
     }

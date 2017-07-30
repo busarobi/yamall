@@ -22,110 +22,59 @@ import java.util.List;
 /**
  * Created by busafekete on 7/25/17.
  */
-public class DistTrain {
-    static class DistTrainRunner implements Serializable {
-        protected String inputDir;
-        protected String outputDir;
+public class DistTrain implements Serializable {
 
-        protected String logFile = "";
+    protected String inputDir;
+    protected String outputDir;
 
-        public static int bitsHash = 22;
-        StringBuilder strb = new StringBuilder("");
+    protected String logFile = "";
 
-        protected String method = null;
-        protected SVRG_FR learner = null;
+    public static int bitsHash = 22;
+    StringBuilder strb = new StringBuilder("");
 
-        public static double minPrediction = -50.0;
-        public static double maxPrediction = 50.0;
+    protected String method = null;
+    protected SVRG_FR learner = null;
 
-        protected double cumLoss = 0.0;
-        protected long numSamples = 0;
-        public static int iter = 100;
+    public static double minPrediction = -50.0;
+    public static double maxPrediction = 50.0;
 
-        //FileSystem hdfs = null;
-        //ArrayList<Path> featureFilePaths = null;
-        public DistTrainRunner() {
-            SparkConf sparkConf = new SparkConf().setAppName("spark yamall (training)");
+    protected double cumLoss = 0.0;
+    protected long numSamples = 0;
+    public static int iter = 100;
 
-            this.outputDir = sparkConf.get("spark.myapp.outdir");
-            this.inputDir = sparkConf.get("spark.myapp.input");
+    //FileSystem hdfs = null;
+    //ArrayList<Path> featureFilePaths = null;
+    public DistTrain() {
+        SparkConf sparkConf = new SparkConf().setAppName("spark yamall (training)");
 
-            this.iter = Integer.parseInt(sparkConf.get("spark.myapp.iter", "10"));
+        this.outputDir = sparkConf.get("spark.myapp.outdir");
+        this.inputDir = sparkConf.get("spark.myapp.input");
 
-            this.logFile = this.outputDir + "log.txt";
+        this.iter = Integer.parseInt(sparkConf.get("spark.myapp.iter", "10"));
 
-            strb.append("---Input: " + this.inputDir + "\n");
-            strb.append("---Output: " + this.outputDir + "\n");
-            strb.append("---Iter: " + this.iter + "\n");
-        }
+        this.logFile = this.outputDir + "log.txt";
 
-        protected void saveLog( int i) throws IOException {
-            this.logFile = this.outputDir + "log_" + i + ".txt";
-            ResultWriter.writeToHDFS(this.logFile, strb.toString());
-        }
+        strb.append("---Input: " + this.inputDir + "\n");
+        strb.append("---Output: " + this.outputDir + "\n");
+        strb.append("---Iter: " + this.iter + "\n");
+    }
 
-//        class CustomPartitioner extends Partitioner{
-//
-//            private int numParts;
-//
-//            public CustomPartitioner(int i) {
-//                numParts=i;
-//            }
-//
-//            @Override
-//            public int numPartitions()
-//            {
-//                return numParts;
-//            }
-//
-//            @Override
-//            public int getPartition(Object key){
-//
-//                //partition based on the first character of the key...you can have your logic here !!
-//                return ((String)key).charAt(0)%numParts;
-//
-//            }
-//
-//            @Override
-//            public boolean equals(Object obj){
-//                if(obj instanceof CustomPartitioner)
-//                {
-//                    CustomPartitioner partitionerObject = (CustomPartitioner)obj;
-//                    if(partitionerObject.numParts == this.numParts)
-//                        return true;
-//                }
-//
-//                return false;
-//            }
-//        }
-//
-//
-//
-//        class Extractor implements PairFunction<String,Integer,Instance> {
-//            Random r = new Random();
-//            protected int partition = 0;
-//            VWParser vwparser = null;
-//
-//            public Extractor(int hahsize, int partition){
-//                vwparser = new VWParser(hahsize, null, false);
-//            }
-//            @Override
-//            public Tuple2<Integer,Instance> call(String arg0) throws Exception {
-//                //return a tuple ,split[0] contains continent and split[1] contains country
-//                return new Tuple2<Integer,Instance>(r.nextInt(partition), vwparser.parse(arg0));
-//            }
-//        }
+    protected void saveLog(int i) throws IOException {
+        this.logFile = this.outputDir + "log_" + i + ".txt";
+        ResultWriter.writeToHDFS(this.logFile, strb.toString());
+    }
 
-        class BatchGradObject implements Serializable {
-            protected double[] localGbatch;
-            protected int size_hash;
-            protected double[] localw;
-            protected VWParser vwparser = null;
-            protected Loss lossFnc = new LogisticLoss();
-            public long gatherGradIter=0;
-            public double cumLoss = 0.0;
-            protected int bits = 0;
-            protected boolean normalizationFlag = false;
+
+    class BatchGradObject implements Serializable {
+        protected double[] localGbatch;
+        protected int size_hash;
+        protected double[] localw;
+        protected VWParser vwparser = null;
+        protected Loss lossFnc = new LogisticLoss();
+        public long gatherGradIter = 0;
+        public double cumLoss = 0.0;
+        protected int bits = 0;
+        protected boolean normalizationFlag = false;
 
 //            BatchGradObject( BatchGradObject o ) {
 //                bits = o.bits;
@@ -141,153 +90,132 @@ public class DistTrain {
 //            }
 
 
-            BatchGradObject( int b, double[] weights, VWParser p) {
-                bits = b;
-                size_hash = 1 << bits;
-                localw = new double[size_hash];
-                for (int i=0; i < size_hash; i++ ) localw[i] = weights[i];
-                localGbatch = new double[size_hash];
-                vwparser = p;
+        BatchGradObject(int b, double[] weights, VWParser p) {
+            bits = b;
+            size_hash = 1 << bits;
+            localw = new double[size_hash];
+            for (int i = 0; i < size_hash; i++) localw[i] = weights[i];
+            localGbatch = new double[size_hash];
+            vwparser = p;
+        }
+
+        public double accumulateGradient(String sampleString) {
+            gatherGradIter++;
+            Instance sample = vwparser.parse(sampleString);
+
+            double pred = predict(sample);
+
+            final double grad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
+
+            pred = Math.min(Math.max(pred, minPrediction), maxPrediction);
+
+            if (Math.abs(grad) > 1e-8) {
+                sample.getVector().addScaledSparseVectorToDenseVector(localGbatch, grad);
+            }
+            cumLoss += lossFnc.lossValue(pred, sample.getLabel()) * sample.getWeight();
+            return pred;
+        }
+
+        public double predict(Instance sample) {
+            return sample.getVector().dot(localw);
+        }
+
+        public void aggregate(BatchGradObject obj2) {
+            System.out.println("Before Cum loss obj1: " + cumLoss);
+            System.out.println("Before Cum loss obj2: " + obj2.cumLoss);
+
+            this.normalizeBatchGradient();
+            obj2.normalizeBatchGradient();
+
+            System.out.println("After Cum loss obj1: " + cumLoss);
+            System.out.println("After Cum loss obj2: " + obj2.cumLoss);
+
+            double sum = (double) (gatherGradIter + obj2.gatherGradIter);
+            if (sum > 0.0) {
+                for (int i = 0; i < size_hash; i++)
+                    localGbatch[i] = (gatherGradIter * localGbatch[i] + obj2.gatherGradIter * obj2.localGbatch[i]) / sum;
+                cumLoss = (gatherGradIter * cumLoss + obj2.gatherGradIter * obj2.cumLoss) / sum;
+                gatherGradIter += obj2.gatherGradIter;
             }
 
-            public double accumulateGradient( String sampleString ) {
-                gatherGradIter++;
-                Instance sample = vwparser.parse(sampleString);
-
-                double pred = predict(sample);
-
-                final double grad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
-
-                pred = Math.min(Math.max(pred, minPrediction), maxPrediction);
-
-                if (Math.abs(grad) > 1e-8) {
-                    sample.getVector().addScaledSparseVectorToDenseVector(localGbatch, grad);
-                }
-                cumLoss += lossFnc.lossValue(pred, sample.getLabel()) * sample.getWeight();
-                return pred;
-            }
-
-            public double predict(Instance sample) {
-                return sample.getVector().dot(localw);
-            }
-
-            public void aggregate(BatchGradObject obj2){
-                System.out.println("Before Cum loss obj1: " + cumLoss);
-                System.out.println("Before Cum loss obj2: " + obj2.cumLoss);
-
-                this.normalizeBatchGradient();
-                obj2.normalizeBatchGradient();
-
-                System.out.println("After Cum loss obj1: " + cumLoss);
-                System.out.println("After Cum loss obj2: " + obj2.cumLoss);
-
-                double sum = (double) (gatherGradIter + obj2.gatherGradIter);
-                if (sum>0.0) {
-                    for (int i = 0; i < size_hash; i++)
-                        localGbatch[i] = (gatherGradIter * localGbatch[i] + obj2.gatherGradIter * obj2.localGbatch[i]) / sum;
-                    cumLoss = (gatherGradIter * cumLoss + obj2.gatherGradIter * obj2.cumLoss) / sum;
-                    gatherGradIter += obj2.gatherGradIter;
-                }
-
-                System.out.println("After aggregation Cum loss obj1: " + cumLoss);
-
-            }
-
-            protected void normalizeBatchGradient() {
-                if (normalizationFlag == false) {
-                    if (gatherGradIter>0) {
-                        for (int i = 0; i < size_hash; i++) localGbatch[i] /= (double) gatherGradIter;
-                        cumLoss /= (double) gatherGradIter;
-                        normalizationFlag = true;
-                    }
-                }
-            }
-            public double[] getGbatch(){ return localGbatch; }
-
-            public long getNum(){ return gatherGradIter; }
+            System.out.println("After aggregation Cum loss obj1: " + cumLoss);
 
         }
 
-        class CombOp implements Function2<BatchGradObject,BatchGradObject,BatchGradObject> {
-
-            @Override
-            public BatchGradObject call(BatchGradObject v1, BatchGradObject v2) throws Exception {
-                v1.aggregate(v2);
-                v2=null;
-                return v1;
+        protected void normalizeBatchGradient() {
+            if (normalizationFlag == false) {
+                if (gatherGradIter > 0) {
+                    for (int i = 0; i < size_hash; i++) localGbatch[i] /= (double) gatherGradIter;
+                    cumLoss /= (double) gatherGradIter;
+                    normalizationFlag = true;
+                }
             }
         }
 
-        class SeqOp implements Function2<BatchGradObject,String,BatchGradObject> {
-
-            @Override
-            public BatchGradObject call(BatchGradObject v1, String v2) throws Exception {
-                v1.accumulateGradient(v2);
-                return v1;
-            }
+        public double[] getGbatch() {
+            return localGbatch;
         }
 
-        public void train() throws IOException {
-            SparkConf sparkConf = new SparkConf().setAppName("spark yamall (training)");
-            JavaSparkContext sparkContext = new JavaSparkContext(sparkConf);
+        public long getNum() {
+            return gatherGradIter;
+        }
 
-            // get file list
-            //hdfs = FileSystem.get(sparkContext.hadoopConfiguration());
+    }
 
-            // Get a list of all the files in the inputPath directory. We will read these files one at a time
-            //the second boolean parameter here sets the recursion to true
-//            featureFilePaths = new ArrayList<>();
-//            RemoteIterator<LocatedFileStatus> fileStatusListIterator = hdfs.listFiles(
-//                    new Path(this.outputDir + "/backup" ), true);
-//
-//            while(fileStatusListIterator.hasNext()){
-//                LocatedFileStatus fileStatus = fileStatusListIterator.next();
-//                String fileName = fileStatus.getPath().getName();
-//                if ( fileName.contains(".gz") || fileName.contains(".txt") )
-//                    featureFilePaths.add(fileStatus.getPath());
-//            }
-//
-//            // pick some file for testing
-//            Collections.shuffle(featureFilePaths);
-//
-//            strb.append("---Number of files: " + featureFilePaths.size() + "\n");
-//            ArrayList<Path> featureFilePathsTest = new ArrayList<>();
-//            for(int i =0; i < 3; i++ ){
-//                featureFilePathsTest.add(featureFilePaths.remove(featureFilePaths.size()-1));
-//            }
+    class CombOp implements Function2<BatchGradObject, BatchGradObject, BatchGradObject> {
 
+        @Override
+        public BatchGradObject call(BatchGradObject v1, BatchGradObject v2) throws Exception {
+            v1.aggregate(v2);
+            v2 = null;
+            return v1;
+        }
+    }
 
-            String line = "";
+    class SeqOp implements Function2<BatchGradObject, String, BatchGradObject> {
 
-            JavaRDD<String> input = sparkContext.textFile(inputDir);
-            //long lineNum = input.count();
+        @Override
+        public BatchGradObject call(BatchGradObject v1, String v2) throws Exception {
+            v1.accumulateGradient(v2);
+            return v1;
+        }
+    }
 
-            //String line = "--- Number of training instance: " + lineNum + "\n";
-            //System.out.println(line);
-            //strb.append(line);
+    public void train() throws IOException {
+        SparkConf sparkConf = new SparkConf().setAppName("spark yamall (training)");
+        JavaSparkContext sparkContext = new JavaSparkContext(sparkConf);
 
-            double fraction = 1.0 /(iter+1.0);
-            System.out.println("--Fraction: " + fraction );
+        String line = "";
 
-            //input.cache();
-            //input.persist();
+        JavaRDD<String> input = sparkContext.textFile(inputDir);
+        //long lineNum = input.count();
 
+        //String line = "--- Number of training instance: " + lineNum + "\n";
+        //System.out.println(line);
+        //strb.append(line);
 
-            // save example to hdfs
-            JavaRDD<String> subsampTrain = input.sample(false,fraction);
-            //JavaRDD<String> subsampTest = input.sample(false,fraction);
-            //DataFrame wordsDataFrame = spark.createDataFrame(subsamp, String.class);
+        double fraction = 1.0 / (iter + 1.0);
+        System.out.println("--Fraction: " + fraction);
+
+        //input.cache();
+        //input.persist();
 
 
-            long lineNumGrad = subsampTrain.count();
-            line = "--- Number of instances for the gradient step: " + lineNumGrad + "\n";
-            strb.append( line );
+        // save example to hdfs
+        JavaRDD<String> subsampTrain = input.sample(false, fraction);
+        //JavaRDD<String> subsampTest = input.sample(false,fraction);
+        //DataFrame wordsDataFrame = spark.createDataFrame(subsamp, String.class);
+
+
+        long lineNumGrad = subsampTrain.count();
+        line = "--- Number of instances for the gradient step: " + lineNumGrad + "\n";
+        strb.append(line);
 
 //            String dirForGradStep = this.outputDir + "grad";
 //            hdfs.delete(new Path(dirForGradStep), true);
 //            subsamp.saveAsTextFile( dirForGradStep, GzipCodec.class );
 
-            // save data for test
+        // save data for test
 //            subsamp = input.sample(false,fraction);
 //            lineNumGrad = subsamp.count();
 //            line = "--- Number of test instance: " + lineNumGrad + "\n";
@@ -298,261 +226,232 @@ public class DistTrain {
 //            subsamp.saveAsTextFile( testDir, GzipCodec.class );
 
 
-            long clusterStartTime = System.currentTimeMillis();
+        long clusterStartTime = System.currentTimeMillis();
 
 
+        // create learner
+        double learningRate = Double.parseDouble(sparkConf.get("spark.myapp.lr", "0.05"));
+        double regPar = Double.parseDouble(sparkConf.get("spark.myapp.reg", "0.0"));
+        int step = Integer.parseInt(sparkConf.get("spark.myapp.step", "500"));
 
-            // create learner
-            double learningRate = Double.parseDouble(sparkConf.get("spark.myapp.lr", "0.05"));
-            double regPar = Double.parseDouble(sparkConf.get("spark.myapp.reg", "0.0"));
-            int step = Integer.parseInt(sparkConf.get("spark.myapp.step", "500"));
+        //int lineNumGrad = (int)(lineNum / (iter + 2.0));
+        //int stepPerGrad = (int)(lineNumGrad/(double)iter);
+        //int sqrtbathcsize =(int) Math.sqrt((double)lineNumGrad);
+        //stepPerGrad = Math.min( stepPerGrad, sqrtbathcsize);
+        //int stepPerGrad =(int) Math.sqrt((double)lineNumGrad);
+        //sparkConf.get( "spark.executor.instances" );
+        int stepPerGrad = (int) (lineNumGrad / (100.0));
 
-            //int lineNumGrad = (int)(lineNum / (iter + 2.0));
-            //int stepPerGrad = (int)(lineNumGrad/(double)iter);
-            //int sqrtbathcsize =(int) Math.sqrt((double)lineNumGrad);
-            //stepPerGrad = Math.min( stepPerGrad, sqrtbathcsize);
-            //int stepPerGrad =(int) Math.sqrt((double)lineNumGrad);
-            //sparkConf.get( "spark.executor.instances" );
-            int stepPerGrad =(int) (lineNumGrad/ (100.0));
 
-            strb.append( "---SVRG_FR learning rate: " + learningRate + "\n");
-            strb.append( "---SVRG_FR regularization param: " + regPar + "\n");
-            strb.append( "---SVRG_FR step: " + stepPerGrad + "\n");
+        strb.append("---SVRG_FR learning rate: " + learningRate + "\n");
+        strb.append("---SVRG_FR regularization param: " + regPar + "\n");
+        strb.append("---SVRG_FR step: " + stepPerGrad + "\n");
 
-            learner = new SVRG_FR(bitsHash);
-            learner.setLearningRate(learningRate);
-            learner.setRegularizationParameter(regPar);
-            learner.setStep(stepPerGrad);
-            Loss lossFnc = new LogisticLoss();
-            learner.setLoss(lossFnc);
+        learner = new SVRG_FR(bitsHash);
+        learner.setLearningRate(learningRate);
+        learner.setRegularizationParameter(regPar);
+        learner.setStep(stepPerGrad);
+        Loss lossFnc = new LogisticLoss();
+        learner.setLoss(lossFnc);
 
+        saveLog(0);
+
+        int gradSteps = 0;
+
+        VWParser vwparser = new VWParser(bitsHash, null, false);
+        //open();
+
+        // optimization
+        for (int i = 0; i < iter; i++) {
+            line = "--------------------------------------------------------------------\n---> Iter: " + i + "\n";
+            strb.append(line);
+
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // grad step
+//                double samplingRatio = (stepPerGrad / (double) lineNumGrad);
+//                line = "--- Inner sampling ratio: " + samplingRatio + "\n";
+//                strb.append( line );
+//
+//                JavaRDD<String> s = subsampTrain.sample(false, samplingRatio);
+//                List<String> samples = s.collect();
+//                line = "--- Inner training size: " + samples.size() + "\n";
+//                strb.append( line );
+//
+//                saveLog(0);
+//                for(String strInstance : samples) {
+//                    //String strInstance = getLine();
+//                    //System.out.println(strInstance);
+//                    Instance instance = vwparser.parse(strInstance);
+//                    double score;
+//
+//
+//                    if (i==0) {
+//                        score = learner.freeRexUpdate(instance);
+//                    } else {
+//                        score = learner.gradStep(instance);
+//                    }
+//                    score = Math.min(Math.max(score, minPrediction), maxPrediction);
+//
+//
+//                    cumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
+//                    numSamples++;
+//                    gradSteps++;
+//                }
+//
+//                learner.initGatherState();
+//                //
+//                double trainLoss = cumLoss / (double) gradSteps;
+//                String modelFile = "model_" + i;
+//                saveModel(this.outputDir, modelFile);
+//                saveLog(0);
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // compute batch gradient
+            double[] prev_w = learner.getDenseWeights();
+
+            int ind = checkIsInf(prev_w);
+            if (ind >= 0) {
+                line = "--- Infinite value in weight vector \n";
+                strb.append(line);
+                saveLog(0);
+                System.exit(0);
+            }
+
+            // compute gradient
+            JavaRDD<String> subsamp = input.sample(false, fraction);
+            BatchGradObject batchgradient = subsamp.treeAggregate(new BatchGradObject(bitsHash, prev_w, vwparser), new SeqOp(), new CombOp(), 11);
+            batchgradient.normalizeBatchGradient();
+
+            ind = checkIsInf(batchgradient.getGbatch());
+            if (ind >= 0) {
+                line = "--- Infinite value in batch grad vector \n";
+                strb.append(line);
+                saveLog(0);
+                System.exit(0);
+            }
+            numSamples += batchgradient.getNum();
+            line = "--- Gbatch step: " + batchgradient.gatherGradIter + " Cum loss: " + batchgradient.cumLoss + "\n";
+            strb.append(line);
             saveLog(0);
 
-            int gradSteps = 0;
-
-            VWParser vwparser = new VWParser(bitsHash, null, false);
-            //open();
-
-            // optimization
-            for( int i=0; i < iter; i++) {
-                line = "---> Iter: " + i + "\n";
-                strb.append( line );
-
-                double samplingRatio = (stepPerGrad / (double) lineNumGrad);
-                line = "--- Inner sampling ratio: " + samplingRatio + "\n";
-                strb.append( line );
-
-                JavaRDD<String> s = subsampTrain.sample(false, samplingRatio);
-                List<String> samples = s.collect();
-                line = "--- Inner training size: " + samples.size() + "\n";
-                strb.append( line );
-
-                saveLog(0);
-//                int it = 0;
-                for(String strInstance : samples) {
-                    //String strInstance = getLine();
-                    //System.out.println(strInstance);
-                    Instance instance = vwparser.parse(strInstance);
-                    double score;
+            // set Gbatch to learner
+            learner.setGBatch(batchgradient.getGbatch());
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-                    if (i==0) {
-                        score = learner.freeRexUpdate(instance);
-                    } else {
-                        score = learner.gradStep(instance);
-                    }
-                    score = Math.min(Math.max(score, minPrediction), maxPrediction);
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // grad step
+            double samplingRatio = (stepPerGrad / (double) lineNumGrad);
+            line = "--- Inner sampling ratio: " + samplingRatio + "\n";
+            strb.append(line);
 
-//                    it++;
-//                    int ind = checkIsInf(learner.getDenseWeights() );
-//                    if( ind >= 0 ){
-//                        line = "--- Infinite value in weight vector, iter " + it + " Index: " + ind + "\n";
-//                        line += strInstance + "\n";
-//                        line += instance.toString() + "\n";
-//                        strb.append(line);
-//                        saveLog(0);
-//                        System.exit(0);
-//                    }
+            //JavaRDD<String> s = subsampTrain.sample(false, samplingRatio);
+            JavaRDD<String> s = input.sample(false, fraction*samplingRatio);
+            List<String> samples = s.collect();
+            line = "--- Inner training size: " + samples.size() + "\n";
+            strb.append(line);
 
+            saveLog(0);
+            for (String strInstance : samples) {
+                //String strInstance = getLine();
+                //System.out.println(strInstance);
+                Instance instance = vwparser.parse(strInstance);
+                double score;
 
-                    cumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
-                    numSamples++;
-                    gradSteps++;
-                }
-
-                learner.initGatherState();
-                //
-                double trainLoss = cumLoss / (double) gradSteps;
-                //double testLoss = eval(subsampTest, vwparser);
-                //double testLoss = 0.0;
-                String modelFile = "model_" + i;
-                saveModel(this.outputDir, modelFile);
-
-                saveLog(0);
-
-                // compute gradient
-                JavaRDD<String> subsamp  = input.sample(false, fraction);
-
-                // compute batch gradient
-                double[] prev_w = learner.getDenseWeights();
-
-                int ind = checkIsInf( prev_w);
-                if( ind >= 0 ){
-                    line = "--- Infinite value in weight vector \n";
-                    strb.append(line);
-                    saveLog(0);
-                    System.exit(0);
-                }
-
-                BatchGradObject batchgradient = subsamp.treeAggregate( new BatchGradObject(bitsHash, prev_w, vwparser), new SeqOp(), new CombOp(),11);
-                batchgradient.normalizeBatchGradient();
-
-                ind = checkIsInf( batchgradient.getGbatch());
-                if( ind >= 0 ){
-                    line = "--- Infinite value in batch grad vector \n";
-                    strb.append(line);
-                    saveLog(0);
-                    System.exit(0);
-                }
-
-                numSamples += batchgradient.getNum();
-
-                // set Gbatch to learner
-                learner.setGBatch(batchgradient.getGbatch());
-
-                line = "--- Gbatch step: " + batchgradient.gatherGradIter + " Cum loss: " + batchgradient.cumLoss + "\n";
-                strb.append( line );
-
-                long clusteringRuntime = System.currentTimeMillis() - clusterStartTime;
-                double elapsedTime = clusteringRuntime/1000.0;
-                double elapsedTimeInhours = elapsedTime/3600.0;
-
-                line = String.format("%d %f %f %f\n", numSamples, trainLoss, batchgradient.cumLoss, elapsedTimeInhours);
-                strb.append(line);
-                System.out.print(line);
+                score = learner.gradStep(instance);
+                score = Math.min(Math.max(score, minPrediction), maxPrediction);
 
 
-                saveLog(0);
-                saveLog(i);
+                cumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
+                numSamples++;
+                gradSteps++;
             }
+
+            learner.initGatherState();
+            //
+            double trainLoss = cumLoss / (double) gradSteps;
+            String modelFile = "model_" + i;
+            saveModel(this.outputDir, modelFile);
+            saveLog(0);
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // info
+
+            long clusteringRuntime = System.currentTimeMillis() - clusterStartTime;
+            double elapsedTime = clusteringRuntime / 1000.0;
+            double elapsedTimeInhours = elapsedTime / 3600.0;
+
+            line = String.format("%d %f %f %f\n", numSamples, trainLoss, batchgradient.cumLoss, elapsedTimeInhours);
+            strb.append(line);
+            System.out.print(line);
+
+
+            saveLog(0);
+            saveLog(i);
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////
+        }
 //            Extractor ext = new Extractor(bitsHash,iter+1);
 //            JavaPairRDD<Integer,Instance> pairRDD= input.mapToPair(ext);
 //            pairRDD.groupByKey();
 
-            //pairRDD=pairRDD.partitionBy(new CustomPartitioner(iter+1));
-        }
+        //pairRDD=pairRDD.partitionBy(new CustomPartitioner(iter+1));
+    }
 
-        protected int checkIsInf( double[] arr ){
-            int retVal = -1;
-            for(int i=0; i < arr.length; i++ ){
-                if (Double.isInfinite(arr[i])){
-                    retVal = i;
-                    break;
-                }
+    protected int checkIsInf(double[] arr) {
+        int retVal = -1;
+        for (int i = 0; i < arr.length; i++) {
+            if (Double.isInfinite(arr[i])) {
+                retVal = i;
+                break;
             }
-            return retVal;
+        }
+        return retVal;
+    }
+
+    protected void saveModel(String dir, String fname) throws IOException {
+        FileDeleter.delete(new File(dir + fname));
+        IOLearner.saveLearner(learner, fname);
+
+        // copy output to HDFS
+        FileSystem fileSystem = FileSystem.get(new Configuration());
+        fileSystem.moveFromLocalFile(new Path(fname), new Path(dir));
+
+    }
+
+    public double eval(JavaRDD<String> samples, VWParser vwparser) throws IOException {
+        int numSamples = 0;
+        double score;
+        double cumLoss = 0.0;
+
+        for (String strLine : samples.take(300000)) {
+
+            Instance sample;
+
+            if (strLine != null) {
+                sample = vwparser.parse(strLine);
+            } else
+                break;
+
+
+            score = learner.predict(sample);
+            score = Math.min(Math.max(score, minPrediction), maxPrediction);
+
+            cumLoss += learner.getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
+
+            numSamples++;
         }
 
-        protected void saveModel( String dir, String fname ) throws IOException {
-            FileDeleter.delete(new File(dir + fname));
-            IOLearner.saveLearner(learner, fname);
-
-            // copy output to HDFS
-            FileSystem fileSystem = FileSystem.get(new Configuration());
-            fileSystem.moveFromLocalFile(new Path(fname), new Path(dir));
-
-        }
-
-        public double eval( JavaRDD<String> samples, VWParser vwparser ) throws  IOException {
-            int numSamples = 0;
-            double score;
-            double cumLoss = 0.0;
-
-            for (String strLine : samples.take(300000)) {
-
-                Instance sample;
-
-                if (strLine != null) {
-                    sample = vwparser.parse(strLine);
-                } else
-                    break;
-
-
-                score = learner.predict(sample);
-                score = Math.min(Math.max(score, minPrediction), maxPrediction);
-
-                cumLoss += learner.getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
-
-                numSamples++;
-            }
-
-            return cumLoss / (double) numSamples;
-        }
-
-
-//        public double eval( ArrayList<Path> files, FileSystem hdfs, VWParser vwparser ) throws  IOException {
-//            int numSamples = 0;
-//            double score;
-//            double cumLoss = 0.0;
-//
-//            for (Path featureFile : files) {
-//                BufferedReader br = null;
-//                if (featureFile.getName().contains(".gz"))
-//                    br = new BufferedReader(new InputStreamReader(new GZIPInputStream(hdfs.open(featureFile))));
-//                else
-//                    br = new BufferedReader(new InputStreamReader(hdfs.open(featureFile)));
-//
-//                for(;;) { // forever
-//                    String strLine = br.readLine();
-//
-//                    Instance sample;
-//
-//                    if (strLine != null) {
-//                        sample = vwparser.parse(strLine);
-//                    } else
-//                        break;
-//
-//
-//                    score = learner.predict(sample);
-//                    score = Math.min(Math.max(score, minPrediction), maxPrediction);
-//
-//                    cumLoss += learner.getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
-//
-//                    numSamples++;
-//                }
-//            }
-//
-//            return cumLoss / (double) numSamples;
-//        }
-
-//        BufferedReader trainbr = null;
-//        public void open()throws IOException {
-//            if (trainbr != null) trainbr.close();
-//
-//            Collections.shuffle(featureFilePaths);
-//            Path featureFile = featureFilePaths.get(0);
-//            System.out.println("----- Starting file " + featureFile.toString() + " -----");
-//
-//            if (featureFile.getName().contains(".gz"))
-//                trainbr = new BufferedReader(new InputStreamReader(new GZIPInputStream(hdfs.open(featureFile))));
-//            else
-//                trainbr = new BufferedReader(new InputStreamReader(hdfs.open(featureFile)));
-//        }
-//
-//
-//        public String getLine() throws IOException{
-//            String strLine = trainbr.readLine();
-//            if (strLine == null) open();
-//            strLine = trainbr.readLine();
-//            return strLine;
-//        }
-
+        return cumLoss / (double) numSamples;
     }
 
 
 
     public static void main(String[] args) throws IOException {
-        DistTrainRunner sl = new DistTrainRunner();
+        DistTrain sl = new DistTrain();
         sl.train();
     }
 

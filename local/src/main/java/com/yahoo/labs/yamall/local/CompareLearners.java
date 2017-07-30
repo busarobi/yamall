@@ -25,7 +25,7 @@ public class CompareLearners extends Thread {
     protected Learner learner = null;
     protected Properties properties = null;
     public static int bitsHash = 22;
-    public static int evalPeriod = 10000;
+    public static int evalPeriod = 1000;
 
     public static double minPrediction = -50.0;
     public static double maxPrediction = 50.0;

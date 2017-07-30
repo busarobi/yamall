@@ -104,7 +104,7 @@ public class SVRG_VW extends SVRG {
         return pred;
     }
 
-    protected void initGatherState() {
+    public void initGatherState() {
         for (int i = 0; i < size_hash; i++) {
             int missed_steps = gradStep - last_updated[i];
             if (missed_steps > 0) {
@@ -124,6 +124,12 @@ public class SVRG_VW extends SVRG {
         gatherGradIter = 0;
     }
 
+    public double[] getDenseWeights() {
+        return w;
+    }
 
+    public void setGBatch( double[] arr ){
+        for (int i=0; i < size_hash; i++ ) Gbatch[i] = arr[i];
+    }
 
 }
