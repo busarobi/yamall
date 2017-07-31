@@ -22,7 +22,7 @@ public class SVRG implements Learner {
     protected double lambda = 0.0;
 
     protected int backCounter = 0;
-    protected int gradStep = 0;
+    public int gradStep = 0;
 
     protected transient double[] w;
     protected transient int[] last_updated; //records when each index was last updated for proper regularization

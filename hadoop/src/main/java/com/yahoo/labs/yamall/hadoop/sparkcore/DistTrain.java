@@ -267,7 +267,7 @@ public class DistTrain implements Serializable {
             strb.append(line);
 
             //////////////////////////////////////////////////////////////////////////////////////////////////////////
-            // grad step
+            // burnin
             if (i==0) {
                 double samplingRatio = (stepPerGrad / (double) lineNumGrad);
                 line = "--- Burnin inner sampling ratio: " + samplingRatio + "\n";
@@ -279,6 +279,7 @@ public class DistTrain implements Serializable {
                 strb.append(line);
 
                 saveLog(0);
+                learner.gradStep = 0;
                 for (String strInstance : samples) {
                     //String strInstance = getLine();
                     //System.out.println(strInstance);
@@ -357,6 +358,8 @@ public class DistTrain implements Serializable {
             strb.append(line);
 
             saveLog(0);
+
+            learner.gradStep = 0;
             for (String strInstance : samples) {
                 //String strInstance = getLine();
                 //System.out.println(strInstance);

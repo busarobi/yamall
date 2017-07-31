@@ -89,8 +89,8 @@ public class CompareLearners extends Thread {
                 double trainLoss = cumLoss / (double) numSamples;
                 double testLoss = eval();
 
-
-                String line = String.format("%d %f %f\n", numSamples, trainLoss, testLoss );
+                double l2norm = learner.getWeights().squaredL2Norm();
+                String line = String.format("%d %f %f %f\n", numSamples, trainLoss, testLoss, l2norm );
                 results.write(line );
                 results.flush();
 
@@ -224,7 +224,10 @@ public class CompareLearners extends Thread {
 
             System.out.println( "FREE REX learning rate: " + learningRate);
 
-            learner = new PerCoordinateFreeRex(bitsHash);
+            PerCoordinateFreeRex l = new PerCoordinateFreeRex(bitsHash);
+            l.use_scaling(true);
+            learner = l;
+
             learner.setLearningRate(learningRate);
         } else if ( this.method .compareToIgnoreCase("SOLO") == 0) {
             double learningRate = Double.parseDouble(this.properties.getProperty("solo_lr", "0.1"));
