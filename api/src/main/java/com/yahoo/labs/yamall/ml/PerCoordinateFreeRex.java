@@ -103,11 +103,11 @@ public class PerCoordinateFreeRex implements Learner {
                 if (inverseEtaSq_i>1e-7) {
                     double update = (Math.signum(sumGrads_i)) * (Math.exp(k_inv * Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
                     w[key] = update;
-//                    if (Double.isInfinite(update)){
-//                        System.out.printf( "key: %d\n", key);
-//                        System.out.printf( "inverseEtaSq_i: %f\n", inverseEtaSq_i );
-//                        System.out.printf( "sumGrads_i: %f\n", sumGrads_i );
-//                    }
+                    if (Double.isInfinite(update)){
+                        System.out.printf( "key: %d\n", key);
+                        System.out.printf( "inverseEtaSq_i: %f\n", inverseEtaSq_i );
+                        System.out.printf( "sumGrads_i: %f\n", sumGrads_i );
+                    }
                 }
 
                 if (use_scaling) { //In practice I suspect this is a bad trade-off

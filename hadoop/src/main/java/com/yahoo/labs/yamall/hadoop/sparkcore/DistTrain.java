@@ -240,7 +240,7 @@ public class DistTrain implements Serializable {
         //stepPerGrad = Math.min( stepPerGrad, sqrtbathcsize);
         //int stepPerGrad =(int) Math.sqrt((double)lineNumGrad);
         //sparkConf.get( "spark.executor.instances" );
-        int stepPerGrad = (int) (lineNumGrad / (100.0));
+        int stepPerGrad = (int) (lineNumGrad / (10.0));
 
 
         strb.append("---SVRG_FR learning rate: " + learningRate + "\n");
@@ -268,42 +268,45 @@ public class DistTrain implements Serializable {
 
             //////////////////////////////////////////////////////////////////////////////////////////////////////////
             // grad step
-//                double samplingRatio = (stepPerGrad / (double) lineNumGrad);
-//                line = "--- Inner sampling ratio: " + samplingRatio + "\n";
-//                strb.append( line );
-//
-//                JavaRDD<String> s = subsampTrain.sample(false, samplingRatio);
-//                List<String> samples = s.collect();
-//                line = "--- Inner training size: " + samples.size() + "\n";
-//                strb.append( line );
-//
-//                saveLog(0);
-//                for(String strInstance : samples) {
-//                    //String strInstance = getLine();
-//                    //System.out.println(strInstance);
-//                    Instance instance = vwparser.parse(strInstance);
-//                    double score;
-//
-//
-//                    if (i==0) {
-//                        score = learner.freeRexUpdate(instance);
-//                    } else {
-//                        score = learner.gradStep(instance);
-//                    }
-//                    score = Math.min(Math.max(score, minPrediction), maxPrediction);
-//
-//
-//                    cumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
-//                    numSamples++;
-//                    gradSteps++;
-//                }
-//
-//                learner.initGatherState();
-//                //
-//                double trainLoss = cumLoss / (double) gradSteps;
-//                String modelFile = "model_" + i;
-//                saveModel(this.outputDir, modelFile);
-//                saveLog(0);
+            if (i==0) {
+                double samplingRatio = (stepPerGrad / (double) lineNumGrad);
+                line = "--- Burnin inner sampling ratio: " + samplingRatio + "\n";
+                strb.append(line);
+
+                JavaRDD<String> s = input.sample(false, fraction*samplingRatio);
+                List<String> samples = s.collect();
+                line = "--- Burnin inner training size: " + samples.size() + "\n";
+                strb.append(line);
+
+                saveLog(0);
+                for (String strInstance : samples) {
+                    //String strInstance = getLine();
+                    //System.out.println(strInstance);
+                    Instance instance = vwparser.parse(strInstance);
+                    double score;
+
+
+                    score = learner.freeRexUpdate(instance);
+                    score = Math.min(Math.max(score, minPrediction), maxPrediction);
+
+
+                    cumLoss += learner.getLoss().lossValue(score, instance.getLabel()) * instance.getWeight();
+                    numSamples++;
+                    gradSteps++;
+                }
+
+                learner.initGatherState();
+                //
+                long clusteringRuntime = System.currentTimeMillis() - clusterStartTime;
+                double elapsedTime = clusteringRuntime / 1000.0;
+                double elapsedTimeInhours = elapsedTime / 3600.0;
+
+                double trainLoss = cumLoss / (double) gradSteps;
+                line = String.format("--Burn in %d %f %f %f\n", numSamples, trainLoss, -1.0, elapsedTimeInhours);
+                strb.append(line);
+
+                saveLog(0);
+            }
             //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
