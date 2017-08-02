@@ -272,11 +272,14 @@ public class StreamTrain {
             } else if ( this.method .compareToIgnoreCase("FREE_REX") == 0) {
                 strb.append( "---FREE REX learning rate: " + learningRate + "\n");
                 strb.append( "---FREE REX scaling: " + Boolean.toString(scaling) + "\n");
+                strb.append( "---FREE REX weight scaling: " + Boolean.toString(wscaling) + "\n");
 
                 PerCoordinateFreeRex l = new PerCoordinateFreeRex(bitsHash);
+
                 l.useScaling(scaling);
-                l.setLearningRate(learningRate);
                 l.useWeightScaling(wscaling);
+
+                l.setLearningRate(learningRate);
 
                 learner = l;
             } else if ( this.method .compareToIgnoreCase("SOLO") == 0) {
