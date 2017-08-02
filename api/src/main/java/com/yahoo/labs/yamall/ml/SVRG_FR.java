@@ -111,34 +111,38 @@ public class SVRG_FR extends SVRG {
                 state = SVRG.GATHER_GRADIENT;
             } else if (state == SVRG.GATHER_GRADIENT ){ // switch to update parameters
                 //backCounter = (int) Math.sqrt((double)step);
+                System.out.printf( "-->#1 Norm of weight vector: %f\n", this.freerex.getWeights().squaredL2Norm() );
+                this.freerex.updateScaleingVector(this.scale);
                 backCounter = getGradientStep();
                 normalizeBatchGradient();
+                System.out.printf( "-->#2 Norm of weight vector: %f\n", this.freerex.getWeights().squaredL2Norm() );
                 state = SVRG.UPDATE_GRADIENT;
             } else if ( state == SVRG.UPDATE_GRADIENT ) { // switch to gather gradient
+                System.out.printf( "-->#3 Norm of weight vector: %f\n", this.freerex.getWeights().squaredL2Norm() );
                 backCounter = step;
                 initGatherState();
                 state = SVRG.GATHER_GRADIENT;
+                System.out.printf( "-->#4 Norm of weight vector: %f\n", this.freerex.getWeights().squaredL2Norm() );
             }
         }
     }
 
     public void initGatherState() {
-        //double wsum = freerex.getWeights().squaredL2Norm();
-        for (int i = 0; i < size_hash; i++) {
-            int missed_steps = gradStep - last_updated[i];
-            if(missed_steps > 0) {
-                freerex.batch_update_coord(i, Gbatch[i], missed_steps);
-            }
-            last_updated[i] = 0;
-        }
-
+        System.out.printf( "-->#5 Norm of weight vector: %f\n", this.freerex.getWeights().squaredL2Norm() );
+//        for (int i = 0; i < size_hash; i++) {
+//            int missed_steps = gradStep - last_updated[i];
+//            if(missed_steps > 0) {
+//                freerex.batch_update_coord(i, Gbatch[i], missed_steps);
+//            }
+//            last_updated[i] = 0;
+//        }
+        System.out.printf( "-->#6 Norm of weight vector: %f\n", this.freerex.getWeights().squaredL2Norm() );
         double[] w_tmp = freerex.getDenseWeights();
         for (int i=0; i < size_hash; i++ ) w_prev[i] = w_tmp[i];
         for (int i=0; i < size_hash; i++ ) Gbatch[i] = 0;
         gatherGradIter = 0;
         gradStep = 0;
 
-        this.freerex.updateScaleingVector(this.scale);
         // centering
         this.freerex.setCenter(w_prev);
         this.freerex.reset();
@@ -152,7 +156,9 @@ public class SVRG_FR extends SVRG {
         return freerex.predict(sample);
     }
 
-
+    public SparseVector getWeights() {
+        return this.freerex.getWeights();
+    }
 
     public void setLoss(Loss lossFnc) {
         this.lossFnc = lossFnc;

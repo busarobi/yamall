@@ -185,6 +185,7 @@ public class SVRG implements Learner {
         for (int i=0; i < size_hash; i++ ) Gbatch[i] /= (double)gatherGradIter;
 
         if (this.averaging ) {
+            System.exit(-1);
             for (int i = 0; i < size_hash; i++) w_avg[i] = w[i];
         }
 
