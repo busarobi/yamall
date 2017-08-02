@@ -71,7 +71,6 @@ public class StreamTrain {
         }
 
         protected void saveLog() throws IOException {
-            this.logFile = this.outputDir + "log_" + this.numSamples + "_.txt";
             ResultWriter.writeToHDFS(this.logFile, strb.toString());
         }
 
@@ -106,7 +105,7 @@ public class StreamTrain {
 
             strb.append("---Number of files: " + featureFilePaths.size() + "\n");
             ArrayList<Path> featureFilePathsTest = new ArrayList<>();
-            for(int i =0; i < 3; i++ ){
+            for(int i =0; i < 4; i++ ){
                 featureFilePathsTest.add(featureFilePaths.remove(featureFilePaths.size()-1));
             }
 
@@ -149,6 +148,10 @@ public class StreamTrain {
                         String line = String.format("%d %f %f %f\n", numSamples, trainLoss, testLoss, elapsedTimeInhours);
                         strb.append(line);
                         System.out.print(this.method + " " + line);
+
+                        this.logFile = this.outputDir + "log_" + this.numSamples + ".txt";
+                        this.saveLog();
+                        this.logFile = this.outputDir + "log_0.txt";
                         this.saveLog();
 
                         String modelFile = "model_" + numSamples;
@@ -214,7 +217,8 @@ public class StreamTrain {
             double learningRate = Double.parseDouble(sparkConf.get("spark.myapp.lr", "0.05"));
             double regPar = Double.parseDouble(sparkConf.get("spark.myapp.reg", "0.0"));
             int step = Integer.parseInt(sparkConf.get("spark.myapp.step", "500"));
-
+            boolean scaling = Boolean.parseBoolean(sparkConf.get("spark.myapp.scaling", "true"));
+            boolean wscaling = Boolean.parseBoolean(sparkConf.get("spark.myapp.wscaling", "false"));
 
             System.out.println( "----> Method: " + this.method + "\n" );
 
@@ -267,9 +271,14 @@ public class StreamTrain {
                 learner.setLearningRate(learningRate);
             } else if ( this.method .compareToIgnoreCase("FREE_REX") == 0) {
                 strb.append( "---FREE REX learning rate: " + learningRate + "\n");
+                strb.append( "---FREE REX scaling: " + Boolean.toString(scaling) + "\n");
 
-                learner = new PerCoordinateFreeRex(bitsHash);
-                learner.setLearningRate(learningRate);
+                PerCoordinateFreeRex l = new PerCoordinateFreeRex(bitsHash);
+                l.useScaling(scaling);
+                l.setLearningRate(learningRate);
+                l.useWeightScaling(wscaling);
+
+                learner = l;
             } else if ( this.method .compareToIgnoreCase("SOLO") == 0) {
                 strb.append( "---SOLO learning rate: " + learningRate + "\n");
 

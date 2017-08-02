@@ -219,13 +219,16 @@ public class CompareLearners extends Thread {
             learner.setLearningRate(learningRate);
         } else if ( this.method .compareToIgnoreCase("FREE_REX") == 0) {
             double learningRate = Double.parseDouble(this.properties.getProperty("free_rex_lr", "0.01"));
+            boolean scaling = Boolean.parseBoolean(this.properties.getProperty("free_rex_scaling", "true"));
+            boolean wscaling = Boolean.parseBoolean(this.properties.getProperty("free_rex_wscaling", "false"));
 
             this.postFix = String.format("lr_%f_", learningRate) + this.postFix;
 
             System.out.println( "FREE REX learning rate: " + learningRate);
 
             PerCoordinateFreeRex l = new PerCoordinateFreeRex(bitsHash);
-            l.use_scaling(true);
+            l.useScaling(scaling);
+            l.useWeightScaling(wscaling);
             learner = l;
 
             learner.setLearningRate(learningRate);

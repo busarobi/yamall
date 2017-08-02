@@ -24,7 +24,9 @@ public class PerCoordinateFreeRex implements Learner {
     private transient double[] center;
     private transient double[] w;
 
-    private boolean use_scaling = false;
+    private boolean useScaling = false;
+    private boolean useWeightScaling = false;
+
     private double k_inv = 0.45; // sqrt(1/5)
     private Loss lossFnc;
     public double iter = 0;
@@ -52,26 +54,14 @@ public class PerCoordinateFreeRex implements Learner {
         }
     }
 
-    public void use_scaling(boolean use_scaling) {
-        this.use_scaling = use_scaling;
-    }
-
     public void reset() {
         for(int i=0; i< size_hash; i++) {
             //maxGrads[i] = 0;
             inverseEtaSq[i] = 0;
             sumGrads[i] = 0;
-            scaling[i] = 0;
+            scaling[i] = 1.0;
             w[i] = center[i];
         }
-    }
-
-    public void setLoss(Loss lossFnc) {
-        this.lossFnc = lossFnc;
-    }
-
-    public void setLearningRate(double k_inv) {
-        this.k_inv = k_inv;
     }
 
     public double update(Instance sample) {
@@ -101,20 +91,35 @@ public class PerCoordinateFreeRex implements Learner {
                 inverseEtaSq[key] = inverseEtaSq_i;
 
                 if (inverseEtaSq_i>1e-7) {
-                    double update = (Math.signum(sumGrads_i)) * (Math.exp(k_inv * Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
-                    w[key] = update;
-                    if (Double.isInfinite(update)){
-                        System.out.printf( "key: %d\n", key);
-                        System.out.printf( "inverseEtaSq_i: %f\n", inverseEtaSq_i );
-                        System.out.printf( "sumGrads_i: %f\n", sumGrads_i );
-                    }
-                }
+                    double offset = (Math.signum(sumGrads_i)) * (Math.exp(k_inv * Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0);
 
-                if (use_scaling) { //In practice I suspect this is a bad trade-off
-                    double scaling_i = scaling[key];
-                    scaling_i = Math.max(scaling_i, inverseEtaSq_i / (maxGrads_i * maxGrads_i));
-                    scaling[key] = scaling_i;
-                    w[key] /= scaling_i;
+                    if (useScaling) {
+                        double scaling_i = scaling[key];
+                        scaling_i = Math.max(scaling_i, inverseEtaSq_i / (maxGrads_i * maxGrads_i));
+                        scaling[key] = scaling_i;
+                        if (scaling_i > 0.0)
+                            offset /= scaling_i;
+                    }
+
+                    if (useWeightScaling) {
+                        double scaling_i = scaling[key];
+                        double absValue = Math.abs(entry.getDoubleValue());
+                        if (absValue > scaling_i) {
+                            scaling_i = absValue;
+                            scaling[key] = scaling_i;
+                        }
+                        if (scaling_i > 0.0)
+                            offset /= scaling_i;
+                    }
+
+                    double update = offset + center[key];
+
+                    w[key] = update;
+//                    if (Double.isInfinite(update)){
+//                        System.out.printf( "key: %d\n", key);
+//                        System.out.printf( "inverseEtaSq_i: %f\n", inverseEtaSq_i );
+//                        System.out.printf( "sumGrads_i: %f\n", sumGrads_i );
+//                    }
                 }
 
             }
@@ -135,6 +140,29 @@ public class PerCoordinateFreeRex implements Learner {
         return SparseVector.dense2Sparse(w);
     }
 
+    public void setLoss(Loss lossFnc) {
+        this.lossFnc = lossFnc;
+    }
+
+    public void setLearningRate(double k_inv) {
+        this.k_inv = k_inv;
+    }
+
+    public void useScaling(boolean flag) {
+        if (this.useWeightScaling && flag) {
+            System.out.println("Scaling and weight scaling cannot be used together! ");
+            System.exit(-1);
+        }
+        this.useScaling = flag;
+    }
+
+    public void useWeightScaling(boolean flag ){
+        if (this.useScaling && flag) {
+            System.out.println("Scaling and weight scaling cannot be used together! ");
+            System.exit(-1);
+        }
+        this.useWeightScaling = flag;
+    }
 
     /**
      * The following code is hopefully useful for an SVRG implementation.
@@ -145,25 +173,43 @@ public class PerCoordinateFreeRex implements Learner {
     }
 
     public void batch_update_coord(int key, double negativeGrad, int missed_steps) {
+        if (this.useWeightScaling) {
+            System.out.println( "Weight scaling cannot be used with gradient based update" );
+            System.exit(-1);
+        }
+
         // useful for SVRG lazy update.
         if (Math.abs(negativeGrad) > 1e-8 && missed_steps > 0) {
             double sumGrads_i = sumGrads[key];
             double maxGrads_i = maxGrads[key];
             double inverseEtaSq_i = inverseEtaSq[key];
-            double scaling_i = scaling[key];
+
             sumGrads_i += missed_steps * negativeGrad;
             maxGrads_i = Math.max(maxGrads_i, Math.abs(negativeGrad));
             inverseEtaSq_i = Math.max(inverseEtaSq_i + 2 * missed_steps * negativeGrad * negativeGrad, Math.abs(sumGrads_i) * maxGrads_i);
-            scaling_i = Math.max(scaling_i, inverseEtaSq_i / (maxGrads_i * maxGrads_i));
+
             maxGrads[key] = maxGrads_i;
             sumGrads[key] = sumGrads_i;
-            scaling[key] = scaling_i;
+
             inverseEtaSq[key] = inverseEtaSq_i;
-            if (inverseEtaSq_i>1e-7)
-                w[key] = (Math.signum(sumGrads_i)) * ( Math.exp( k_inv *Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
-            if (use_scaling) { //In practice I suspect this is a bad trade-off
-                w[key] /= scaling_i;
+
+            if (inverseEtaSq_i>1e-7) {
+                double offset = (Math.signum(sumGrads_i)) * (Math.exp(k_inv * Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0);
+
+                if (useScaling) {
+                    double scaling_i = scaling[key];
+                    scaling_i = Math.max(scaling_i, inverseEtaSq_i / (maxGrads_i * maxGrads_i));
+                    scaling[key] = scaling_i;
+                    if (scaling_i > 0.0)
+                        offset /= scaling[key];
+                }
+
+                double update = offset + center[key];
+
+                w[key] = update;
             }
+
+
         }
     }
 
@@ -172,29 +218,7 @@ public class PerCoordinateFreeRex implements Learner {
         for (Int2DoubleMap.Entry entry : negativeGrad.int2DoubleEntrySet()) {
             double negativeGrad_i = entry.getDoubleValue();
 
-            if (Math.abs(negativeGrad_i) > 1e-8) {
-                int key = entry.getIntKey();
-                double maxGrads_i = maxGrads[key];
-                double sumGrads_i = sumGrads[key];
-                double scaling_i = scaling[key];
-                double inverseEtaSq_i = inverseEtaSq[key];
-
-                sumGrads_i += negativeGrad_i;
-                maxGrads_i = Math.max(maxGrads_i, Math.abs(negativeGrad_i));
-
-                inverseEtaSq_i = Math.max(inverseEtaSq_i + 2 * negativeGrad_i * negativeGrad_i, Math.abs(sumGrads_i) * maxGrads_i);
-                scaling_i = Math.max(scaling_i, inverseEtaSq_i / (maxGrads_i * maxGrads_i));
-
-                maxGrads[key] = maxGrads_i;
-                sumGrads[key] = sumGrads_i;
-                scaling[key] = scaling_i;
-                inverseEtaSq[key] = inverseEtaSq_i;
-                if (inverseEtaSq_i>1e-7)
-                    w[key] = (Math.signum(sumGrads_i)) * ( Math.exp( k_inv * Math.abs(sumGrads_i) / Math.sqrt(inverseEtaSq_i)) - 1.0) + center[key];
-                if (use_scaling) { //In practice I suspect this is a bad trade-off
-                    w[key] /= scaling_i;
-                }
-            }
+            batch_update_coord(entry.getIntKey(), negativeGrad_i, 1);
         }
 
     }

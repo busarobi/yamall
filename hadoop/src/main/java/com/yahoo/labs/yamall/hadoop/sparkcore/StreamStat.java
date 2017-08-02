@@ -1,6 +1,5 @@
 package com.yahoo.labs.yamall.hadoop.sparkcore;
 
-import org.apache.hadoop.io.compress.GzipCodec;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -193,15 +192,14 @@ public class StreamStat {
             ResultWriter.writeToHDFS(resultFile, result.toString());
 
             // write the features
-            String featOutDir = outDir + "features";
-            FileDeleter.directoryDeleter(featOutDir);
-
-            sortedFilteredPairs = sortedFilteredPairs.filter(new Function<Tuple2<Integer, String>, Boolean>() {
-                public Boolean call(Tuple2<Integer, String> x) { return (x._1() > 100000); }
-            } );
-
-            sortedFilteredPairs.coalesce(5).saveAsTextFile(featOutDir, GzipCodec.class);
-            //sortedFilteredPairs.saveAsTextFile(featOutDir);
+//            String featOutDir = outDir + "features";
+//            FileDeleter.directoryDeleter(featOutDir);
+//
+//            sortedFilteredPairs = sortedFilteredPairs.filter(new Function<Tuple2<Integer, String>, Boolean>() {
+//                public Boolean call(Tuple2<Integer, String> x) { return (x._1() > 100000); }
+//            } );
+//
+//            sortedFilteredPairs.coalesce(50).saveAsTextFile(featOutDir, GzipCodec.class);
 
         }
 
