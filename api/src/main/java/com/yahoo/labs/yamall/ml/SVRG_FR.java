@@ -15,6 +15,7 @@ public class SVRG_FR extends SVRG {
         super(bits);
         this.freerex = new PerCoordinateFreeRex(bits);
         //this.freerex.use_scaling(true);
+        this.freerex.useWeightScaling(true);
         state=0;
         backCounter=-2;
     }
@@ -69,7 +70,7 @@ public class SVRG_FR extends SVRG {
 
             last_updated[key] = gradStep;
         }
-
+        freerex.updateScaleingVector(sample);
         freerex.updateFromNegativeGrad(new SparseVector(skeys, svalues));
         return pred;
     }
@@ -122,7 +123,7 @@ public class SVRG_FR extends SVRG {
     }
 
     public void initGatherState() {
-        double wsum = freerex.getWeights().squaredL2Norm();
+        //double wsum = freerex.getWeights().squaredL2Norm();
         for (int i = 0; i < size_hash; i++) {
             int missed_steps = gradStep - last_updated[i];
             if(missed_steps > 0) {
@@ -136,6 +137,8 @@ public class SVRG_FR extends SVRG {
         for (int i=0; i < size_hash; i++ ) Gbatch[i] = 0;
         gatherGradIter = 0;
         gradStep = 0;
+
+        this.freerex.updateScaleingVector(this.scale);
         // centering
         this.freerex.setCenter(w_prev);
         this.freerex.reset();

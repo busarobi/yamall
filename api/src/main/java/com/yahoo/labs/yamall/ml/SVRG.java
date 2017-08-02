@@ -31,6 +31,8 @@ public class SVRG implements Learner {
     protected transient double[] w_prev;
     protected transient double[] w_avg;
 
+    protected double[] scale;
+
     private double N = 0;
     protected Loss lossFnc;
     protected double iter = 0;
@@ -52,6 +54,7 @@ public class SVRG implements Learner {
         w_prev = new double[size_hash];
         // we can get rif of this by using online update
         w_avg = new double[size_hash];
+        scale = new double[size_hash];
     }
 
     public void setLoss(Loss lossFnc) {
@@ -82,6 +85,13 @@ public class SVRG implements Learner {
         if (Math.abs(grad) > 1e-8) {
             sample.getVector().addScaledSparseVectorToDenseVector(Gbatch, grad);
         }
+        for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
+            int key = entry.getIntKey();
+            double value = Math.abs(entry.getDoubleValue());
+            if (value > scale[key])
+                scale[key] = value;
+        }
+
         return pred;
     }
 

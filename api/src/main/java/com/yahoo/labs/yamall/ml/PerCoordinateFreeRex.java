@@ -59,7 +59,9 @@ public class PerCoordinateFreeRex implements Learner {
             //maxGrads[i] = 0;
             inverseEtaSq[i] = 0;
             sumGrads[i] = 0;
-            scaling[i] = 1.0;
+            if (this.useScaling )
+                scaling[i] = 1.0;
+
             w[i] = center[i];
         }
     }
@@ -128,6 +130,23 @@ public class PerCoordinateFreeRex implements Learner {
         return pred;
     }
 
+    public void updateScaleingVector( double[] sc ) {
+        for(int i=0; i< size_hash; i++) {
+            if (sc[i] > scaling[i] )
+                scaling[i] = sc[i];
+        }
+    }
+
+    public void updateScaleingVector( Instance sample ) {
+        for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
+            int key = entry.getIntKey();
+            double value = Math.abs(entry.getDoubleValue());
+            if (value > scaling[key] )
+                scaling[key] = value;
+        }
+    }
+
+
     public double predict(Instance sample) {
         return sample.getVector().dot(w);
     }
@@ -173,11 +192,6 @@ public class PerCoordinateFreeRex implements Learner {
     }
 
     public void batch_update_coord(int key, double negativeGrad, int missed_steps) {
-        if (this.useWeightScaling) {
-            System.out.println( "Weight scaling cannot be used with gradient based update" );
-            System.exit(-1);
-        }
-
         // useful for SVRG lazy update.
         if (Math.abs(negativeGrad) > 1e-8 && missed_steps > 0) {
             double sumGrads_i = sumGrads[key];
@@ -203,6 +217,13 @@ public class PerCoordinateFreeRex implements Learner {
                     if (scaling_i > 0.0)
                         offset /= scaling[key];
                 }
+
+                if (useWeightScaling) {
+                    double scaling_i = scaling[key];
+                    if (scaling_i > 0.0)
+                        offset /= scaling_i;
+                }
+
 
                 double update = offset + center[key];
 
