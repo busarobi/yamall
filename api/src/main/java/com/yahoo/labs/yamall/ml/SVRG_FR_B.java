@@ -14,6 +14,7 @@ public class SVRG_FR_B extends SVRG {
     protected double cumulative_grad_norm_sq = 0;
     protected double gradsum[];
     protected double cumLoss = 0.0;
+    protected double miniCumLoss = 0.0;
     protected double cumBatchLoss = 0.0;
 
     private double minPrediction = -50;
@@ -21,7 +22,7 @@ public class SVRG_FR_B extends SVRG {
     public SVRG_FR_B(int bits) {
         super(bits);
         this.freerex = new FreeRexBatched(bits);
-        //this.freerex.use_scaling(true);
+        this.freerex.useScaling(false);
         this.freerex.useWeightScaling(true);
         state=0;
         backCounter=-2;
@@ -108,6 +109,7 @@ public class SVRG_FR_B extends SVRG {
             double score = Math.min(Math.max(pred, minPrediction), maxPrediction);
 
             cumLoss += lossFnc.lossValue(score, sample.getLabel()) * sample.getWeight();
+            miniCumLoss += lossFnc.lossValue(score, sample.getLabel()) * sample.getWeight();
         } else if (state == SVRG_FR.BURN_IN) {
             pred = this.freerex.update(sample);
         }
@@ -134,22 +136,20 @@ public class SVRG_FR_B extends SVRG {
                     batch_grad_norm_sq += this.Gbatch[i] * this.Gbatch[i];
                 }
                 System.out.printf( "-->#2 Norm of weight vector: %f\n", this.freerex.getWeights().squaredL2Norm() );
-                System.out.printf( "-->#2 Norm of batch vector: %f\n", batch_grad_norm_sq );
+                System.out.printf( "--> Norm of batch vector: %f\n", batch_grad_norm_sq );
                 this.freerex.updateWeightScalingVector(this.scale);
                 this.freerex.setNegativeBatchGrad(this.Gbatch);
                 state = SVRG.UPDATE_GRADIENT;
             } else if ( state == SVRG.UPDATE_GRADIENT ) { // switch to gather gradient
-                if (cumLoss/gradStep > cumBatchLoss/step * 0.99) {
-                    double gradav =0.0;
-//                    for (int i=0; i<size_hash;i++) {
-//                        gradav += gradsum[i] * gradsum[i]
-//                    }
-                    System.out.printf("Not good enough: cum: %f, batch: %f, gradstep %d \n", cumLoss/gradStep, cumBatchLoss/step, gradStep);
+                if (cumLoss/gradStep > cumBatchLoss/step * 0.99 && miniCumLoss/getGradientStep() > cumBatchLoss/step * 0.99) {
+                    System.out.printf("Not good enough: cumLoss: %f, miniCumLoss: %f, batch: %f, gradstep %d \n", cumLoss/gradStep, miniCumLoss/getGradientStep(), cumBatchLoss/step, gradStep);
                     backCounter = getGradientStep();
+                    miniCumLoss = 0.0;
                 } else {
-                    System.out.printf("AllRight!: cum: %f, batch: %f, gradstep %d\n", cumLoss/gradStep, cumBatchLoss/step,gradStep);
+                    System.out.printf("Ending SGD phase: cumLoss: %f, miniCumLoss: %f, batch: %f, gradstep %d \n", cumLoss/gradStep, miniCumLoss/getGradientStep(), cumBatchLoss/step, gradStep);
                     resetGradSum();
                     System.out.printf("-->#3 Norm of weight vector: %f\n", this.freerex.getWeights().squaredL2Norm());
+                    step *= 1.1;
                     backCounter = step;
                     initGatherState();
                     state = SVRG.GATHER_GRADIENT;

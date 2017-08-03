@@ -92,7 +92,7 @@ public class FreeRexBatched implements Learner {
         sumNegativeGradDotGBatch_Iteration = 0;
         sumNegativeGradNormSq_Iteration = 0;
         inverseEtaSq = 0.0;
-        scaling = 1.0;
+        //scaling = 1.0;
         iter = 0;
     }
 
@@ -254,7 +254,7 @@ public class FreeRexBatched implements Learner {
 
 
         maxNegativeGrad = Math.max(maxNegativeGrad, Math.sqrt(gradNormSquared));
-        inverseEtaSq = inverseEtaSq + 2 * gradNormSquared;//Math.max(inverseEtaSq + 2 * gradNormSquared, maxNegativeGrad * sumNegativeGradNorm);
+        inverseEtaSq = Math.max(inverseEtaSq + 2 * gradNormSquared, maxNegativeGrad * sumNegativeGradNorm);
 
 
         if (useScaling && maxNegativeGrad > 1e-8) {
@@ -340,10 +340,10 @@ public class FreeRexBatched implements Learner {
     }
 
     public void useWeightScaling(boolean flag ){
-        if (this.useScaling && flag) {
-            System.out.println("Scaling and weight scaling cannot be used together! ");
-            System.exit(-1);
-        }
+//        if (this.useScaling && flag) {
+//            System.out.println("Scaling and weight scaling cannot be used together! ");
+//            System.exit(-1);
+//        }
         this.useWeightScaling = flag;
     }
 
