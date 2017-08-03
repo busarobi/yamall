@@ -124,6 +124,24 @@ public class SparseVector extends Int2DoubleArrayMap implements Serializable {
         }
     }
 
+    /**
+     * Multiply a SparseVector by a constant and return as a new SparseVector.
+     *
+     * @param scaling
+     *            constant to use in the multiplication.
+     */
+    public SparseVector scale(double scaling) {
+        int[] keys = new int[size()];
+        double[] values = new double[size()];
+        int i = 0;
+        for (Int2DoubleMap.Entry entry : int2DoubleEntrySet()) {
+            keys[i] = entry.getIntKey();
+            values[i] = entry.getDoubleValue() * scaling;
+            i++;
+        }
+        return new SparseVector(keys, values);
+    }
+
     public static SparseVector rescaledDense2Sparse(double[] in, double scaling) {
         int count = 0;
         for (int i = 0; i < in.length; i++) {
