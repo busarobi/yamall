@@ -37,6 +37,7 @@ public class CompareLearners extends Thread {
         this.properties = properties;
         this.postFix = postFix;
         this.method = properties.getProperty("method", null);
+        this.evalPeriod = Integer.parseInt(properties.getProperty("evalPeriod", "1000"));
 
         this.learner = getLearner();
 
@@ -44,6 +45,7 @@ public class CompareLearners extends Thread {
         this.outputFile = fname + "_" + this.method + "_" + this.postFix + ".txt";
 
         System.out.println( "Result file: " + this.outputFile );
+        System.out.println( "Eval period: " + this.evalPeriod );
 
 
     }
