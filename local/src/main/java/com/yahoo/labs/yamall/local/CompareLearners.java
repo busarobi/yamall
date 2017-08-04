@@ -37,6 +37,7 @@ public class CompareLearners extends Thread {
         this.properties = properties;
         this.postFix = postFix;
         this.method = properties.getProperty("method", null);
+        this.evalPeriod = Integer.parseInt(properties.getProperty("evalPeriod", "1000"));
 
         this.learner = getLearner();
 
@@ -44,6 +45,7 @@ public class CompareLearners extends Thread {
         this.outputFile = fname + "_" + this.method + "_" + this.postFix + ".txt";
 
         System.out.println( "Result file: " + this.outputFile );
+        System.out.println( "Eval period: " + this.evalPeriod );
 
 
     }
@@ -208,6 +210,24 @@ public class CompareLearners extends Thread {
             //svrg.doAveraging();
 
             learner = svrg;
+        } else if ( this.method.compareToIgnoreCase("SVRG_FR_B") == 0) {
+            double learningRate = Double.parseDouble(this.properties.getProperty("svrg_fr_b_lr", "0.05"));
+            double regPar = Double.parseDouble(this.properties.getProperty("svrg_fr_b_reg", "0.0"));
+            int step = Integer.parseInt(this.properties.getProperty("svrg_fr_b_step", "500"));
+
+            this.postFix = String.format("lr_%f_reg_%f_step_%d_", learningRate, regPar, step) + this.postFix;
+
+            System.out.println( "SVRG_FR_B learning rate: " + learningRate);
+            System.out.println( "SVRG_FR_B regularization param: " + regPar);
+            System.out.println( "SVRG_FR_B step: " + step);
+
+            SVRG_FR_B svrg = new SVRG_FR_B(bitsHash);
+            svrg.setLearningRate(learningRate);
+            svrg.setRegularizationParameter(regPar);
+            svrg.setStep(step);
+            //svrg.doAveraging();
+
+            learner = svrg;
         } else if ( this.method .compareToIgnoreCase("SGD") == 0) {
             double learningRate = Double.parseDouble(this.properties.getProperty("sgd_lr", "1.0"));
 
@@ -227,6 +247,21 @@ public class CompareLearners extends Thread {
             System.out.println( "FREE REX learning rate: " + learningRate);
 
             PerCoordinateFreeRex l = new PerCoordinateFreeRex(bitsHash);
+            l.useScaling(scaling);
+            l.useWeightScaling(wscaling);
+            learner = l;
+
+            learner.setLearningRate(learningRate);
+        } else if ( this.method .compareToIgnoreCase("FREE_REX_BATCH") == 0) {
+            double learningRate = Double.parseDouble(this.properties.getProperty("free_rex_batch_lr", "0.01"));
+            boolean scaling = Boolean.parseBoolean(this.properties.getProperty("free_rex_batch_scaling", "true"));
+            boolean wscaling = Boolean.parseBoolean(this.properties.getProperty("free_rex_batch_wscaling", "false"));
+
+            this.postFix = String.format("lr_%f_", learningRate) + this.postFix;
+
+            System.out.println( "FREE REX BATCH learning rate: " + learningRate);
+
+            FreeRexBatched l = new FreeRexBatched(bitsHash);
             l.useScaling(scaling);
             l.useWeightScaling(wscaling);
             learner = l;
