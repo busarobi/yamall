@@ -37,15 +37,15 @@ public class SVRG_FR extends SVRG {
             System.exit(-1);
         }
 
-        for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
-            int key = entry.getIntKey();
-            int missed_steps = gradStep - last_updated[key] - 1;
-
-            if (missed_steps > 0) {
-                freerex.batch_update_coord( key, Gbatch[key], missed_steps);
-                last_updated[key] = gradStep;
-            }
-        }
+//        for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
+//            int key = entry.getIntKey();
+//            int missed_steps = gradStep - last_updated[key] - 1;
+//
+//            if (missed_steps > 0) {
+//                freerex.batch_update_coord( key, Gbatch[key], missed_steps);
+//                last_updated[key] = gradStep;
+//            }
+//        }
 
 
         pred = predict(sample);
@@ -144,8 +144,8 @@ public class SVRG_FR extends SVRG {
         gradStep = 0;
 
         // centering
-        this.freerex.setCenter(w_prev);
-        this.freerex.reset();
+//        this.freerex.setCenter(w_prev);
+//        this.freerex.reset();
     }
 
     public double[] getDenseWeights() {
