@@ -237,6 +237,15 @@ public class CompareLearners extends Thread {
 
             learner = new SGD(bitsHash);
             learner.setLearningRate(learningRate);
+        } else if ( this.method .compareToIgnoreCase("Pistol") == 0) {
+            double learningRate = Double.parseDouble(this.properties.getProperty("pistol_lr", "1.0"));
+
+            this.postFix = String.format("lr_%f_", learningRate) + this.postFix;
+
+            System.out.println( "SGD learning rate: " + learningRate);
+
+            learner = new PerCoordinatePiSTOL(bitsHash);
+            learner.setLearningRate(learningRate);
         } else if ( this.method .compareToIgnoreCase("FREE_REX") == 0) {
             double learningRate = Double.parseDouble(this.properties.getProperty("free_rex_lr", "0.01"));
             boolean scaling = Boolean.parseBoolean(this.properties.getProperty("free_rex_scaling", "true"));

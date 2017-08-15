@@ -35,8 +35,7 @@ public class StreamTrain {
 //    }
 
 
-
-    static class SparkLearner implements Serializable  {
+    static class SparkLearner implements Serializable {
         protected String inputDir;
         protected String outputDir;
 
@@ -91,12 +90,12 @@ public class StreamTrain {
             //the second boolean parameter here sets the recursion to true
             ArrayList<Path> featureFilePaths = new ArrayList<>();
             RemoteIterator<LocatedFileStatus> fileStatusListIterator = hdfs.listFiles(
-                    new Path(this.inputDir ), true);
+                    new Path(this.inputDir), true);
 
-            while(fileStatusListIterator.hasNext()){
+            while (fileStatusListIterator.hasNext()) {
                 LocatedFileStatus fileStatus = fileStatusListIterator.next();
                 String fileName = fileStatus.getPath().getName();
-                if ( fileName.contains(".gz") || fileName.contains(".txt") )
+                if (fileName.contains(".gz") || fileName.contains(".txt"))
                     featureFilePaths.add(fileStatus.getPath());
             }
 
@@ -105,8 +104,8 @@ public class StreamTrain {
 
             strb.append("---Number of files: " + featureFilePaths.size() + "\n");
             ArrayList<Path> featureFilePathsTest = new ArrayList<>();
-            for(int i =0; i < 4; i++ ){
-                featureFilePathsTest.add(featureFilePaths.remove(featureFilePaths.size()-1));
+            for (int i = 0; i < 4; i++) {
+                featureFilePathsTest.add(featureFilePaths.remove(featureFilePaths.size() - 1));
             }
 
 
@@ -120,7 +119,7 @@ public class StreamTrain {
                 else
                     br = new BufferedReader(new InputStreamReader(hdfs.open(featureFile)));
 
-                for(;;) { // forever
+                for (; ; ) { // forever
                     String strLine = br.readLine();
 
                     Instance sample;
@@ -138,12 +137,12 @@ public class StreamTrain {
 
                     numSamples++;
 
-                    if (numSamples % evalPeriod == 0 ){
+                    if (numSamples % evalPeriod == 0) {
                         double trainLoss = cumLoss / (double) numSamples;
                         double testLoss = eval(featureFilePathsTest, hdfs, vwparser);
                         long clusteringRuntime = System.currentTimeMillis() - clusterStartTime;
-                        double elapsedTime = clusteringRuntime/1000.0;
-                        double elapsedTimeInhours = elapsedTime/3600.0;
+                        double elapsedTime = clusteringRuntime / 1000.0;
+                        double elapsedTimeInhours = elapsedTime / 3600.0;
 
                         String line = String.format("%d %f %f %f\n", numSamples, trainLoss, testLoss, elapsedTimeInhours);
                         strb.append(line);
@@ -162,10 +161,9 @@ public class StreamTrain {
             }
 
 
-
         }
 
-        public double eval( ArrayList<Path> files, FileSystem hdfs, VWParser vwparser ) throws  IOException {
+        public double eval(ArrayList<Path> files, FileSystem hdfs, VWParser vwparser) throws IOException {
             int numSamples = 0;
             double score;
             double cumLoss = 0.0;
@@ -177,7 +175,7 @@ public class StreamTrain {
                 else
                     br = new BufferedReader(new InputStreamReader(hdfs.open(featureFile)));
 
-                for(;;) { // forever
+                for (; ; ) { // forever
                     String strLine = br.readLine();
 
                     Instance sample;
@@ -200,7 +198,7 @@ public class StreamTrain {
             return cumLoss / (double) numSamples;
         }
 
-        protected void saveModel( String dir, String fname ) throws IOException {
+        protected void saveModel(String dir, String fname) throws IOException {
             FileDeleter.delete(new File(dir + fname));
             IOLearner.saveLearner(learner, fname);
 
@@ -210,7 +208,7 @@ public class StreamTrain {
 
         }
 
-        public void setLearner(){
+        public void setLearner() {
             SparkConf sparkConf = new SparkConf().setAppName("spark yamall (training)");
             this.method = sparkConf.get("spark.myapp.method", "sgd_vw");
 
@@ -220,17 +218,17 @@ public class StreamTrain {
             boolean scaling = Boolean.parseBoolean(sparkConf.get("spark.myapp.scaling", "true"));
             boolean wscaling = Boolean.parseBoolean(sparkConf.get("spark.myapp.wscaling", "false"));
 
-            System.out.println( "----> Method: " + this.method + "\n" );
+            System.out.println("----> Method: " + this.method + "\n");
 
-            if ( this.method.compareToIgnoreCase("SGD_VW") == 0) {
-                strb.append( "---SGD_VW learning rate: " + learningRate + "\n");
+            if (this.method.compareToIgnoreCase("SGD_VW") == 0) {
+                strb.append("---SGD_VW learning rate: " + learningRate + "\n");
 
                 learner = new SGD_VW(bitsHash);
                 learner.setLearningRate(learningRate);
-            } else if ( this.method.compareToIgnoreCase("SVRG") == 0) {
-                strb.append( "---SVRG learning rate: " + learningRate + "\n");
-                strb.append( "---SVRG regularization param: " + regPar + "\n");
-                strb.append( "---SVRG step: " + step + "\n");
+            } else if (this.method.compareToIgnoreCase("SVRG") == 0) {
+                strb.append("---SVRG learning rate: " + learningRate + "\n");
+                strb.append("---SVRG regularization param: " + regPar + "\n");
+                strb.append("---SVRG step: " + step + "\n");
 
                 SVRG svrg = new SVRG(bitsHash);
                 svrg.setLearningRate(learningRate);
@@ -240,7 +238,7 @@ public class StreamTrain {
 
                 learner = svrg;
 
-            } else if ( this.method.compareToIgnoreCase("SVRG_ADA") == 0) {
+            } else if (this.method.compareToIgnoreCase("SVRG_ADA") == 0) {
                 strb.append("---SVRG_ADA learning rate: " + learningRate + "\n");
                 strb.append("---SVRG_ADA regularization param: " + regPar + "\n");
                 strb.append("---SVRG_ADA step: " + step + "\n");
@@ -252,27 +250,44 @@ public class StreamTrain {
                 //svrg.doAveraging();
 
                 learner = svrg;
-            } else if ( this.method.compareToIgnoreCase("SVRG_FR") == 0) {
-                    strb.append( "---SVRG_FR learning rate: " + learningRate + "\n");
-                    strb.append( "---SVRG_FR regularization param: " + regPar + "\n");
-                    strb.append( "---SVRG_FR step: " + step + "\n");
+            } else if (this.method.compareToIgnoreCase("SVRG_FR") == 0) {
+                strb.append("---SVRG_FR learning rate: " + learningRate + "\n");
+                strb.append("---SVRG_FR regularization param: " + regPar + "\n");
+                strb.append("---SVRG_FR step: " + step + "\n");
 
-                    SVRG_FR svrg = new SVRG_FR(bitsHash);
-                    svrg.setLearningRate(learningRate);
-                    svrg.setRegularizationParameter(regPar);
-                    svrg.setStep(step);
-                    //svrg.doAveraging();
+                SVRG_FR svrg = new SVRG_FR(bitsHash);
+                svrg.setLearningRate(learningRate);
+                svrg.setRegularizationParameter(regPar);
+                svrg.setStep(step);
+                //svrg.doAveraging();
 
-                    learner = svrg;
-                } else if ( this.method .compareToIgnoreCase("SGD") == 0) {
-                strb.append( "---SGD learning rate: " + learningRate + "\n");
+                learner = svrg;
+            } else if (this.method.compareToIgnoreCase("SVRG_FR_B") == 0) {
+                strb.append("---SVRG_FR_B learning rate: " + learningRate + "\n");
+                strb.append("---SVRG_FR_B regularization param: " + regPar + "\n");
+                strb.append("---SVRG_FR_B step: " + step + "\n");
+
+                SVRG_FR_B svrg = new SVRG_FR_B(bitsHash);
+                svrg.setLearningRate(learningRate);
+                svrg.setRegularizationParameter(regPar);
+                svrg.setStep(step);
+                //svrg.doAveraging();
+
+                learner = svrg;
+            } else if (this.method.compareToIgnoreCase("SGD") == 0) {
+                strb.append("---SGD learning rate: " + learningRate + "\n");
 
                 learner = new SGD(bitsHash);
                 learner.setLearningRate(learningRate);
-            } else if ( this.method .compareToIgnoreCase("FREE_REX") == 0) {
-                strb.append( "---FREE REX learning rate: " + learningRate + "\n");
-                strb.append( "---FREE REX scaling: " + Boolean.toString(scaling) + "\n");
-                strb.append( "---FREE REX weight scaling: " + Boolean.toString(wscaling) + "\n");
+            } else if (this.method.compareToIgnoreCase("Pistol") == 0) {
+                strb.append("---Pistol learning rate: " + learningRate + "\n");
+
+                learner = new PerCoordinatePiSTOL(bitsHash);
+                learner.setLearningRate(learningRate);
+            } else if (this.method.compareToIgnoreCase("FREE_REX") == 0) {
+                strb.append("---FREE REX learning rate: " + learningRate + "\n");
+                strb.append("---FREE REX scaling: " + Boolean.toString(scaling) + "\n");
+                strb.append("---FREE REX weight scaling: " + Boolean.toString(wscaling) + "\n");
 
                 PerCoordinateFreeRex l = new PerCoordinateFreeRex(bitsHash);
 
@@ -282,17 +297,30 @@ public class StreamTrain {
                 l.setLearningRate(learningRate);
 
                 learner = l;
-            } else if ( this.method .compareToIgnoreCase("SOLO") == 0) {
-                strb.append( "---SOLO learning rate: " + learningRate + "\n");
+            } else if (this.method.compareToIgnoreCase("FREE_REX_BATCHED") == 0) {
+                strb.append("---FREE REX BATCHED learning rate: " + learningRate + "\n");
+                strb.append("---FREE REX BATCHED scaling: " + Boolean.toString(scaling) + "\n");
+                strb.append("---FREE REX BATCHED weight scaling: " + Boolean.toString(wscaling) + "\n");
+
+                FreeRexBatched l = new FreeRexBatched(bitsHash);
+
+                l.useScaling(scaling);
+                l.useWeightScaling(wscaling);
+
+                l.setLearningRate(learningRate);
+
+                learner = l;
+            } else if (this.method.compareToIgnoreCase("SOLO") == 0) {
+                strb.append("---SOLO learning rate: " + learningRate + "\n");
 
                 learner = new PerCoordinateSOLO(bitsHash);
                 learner.setLearningRate(learningRate);
-            } else if ( this.method .compareToIgnoreCase("MB_SGD") == 0) {
+            } else if (this.method.compareToIgnoreCase("MB_SGD") == 0) {
                 MiniBatchSGD mbsgd = new MiniBatchSGD(bitsHash);
 
-                strb.append( "---MB SGD learning rate: " + learningRate + "\n");
-                strb.append( "---MB SGD regularization param: " + regPar + "\n");
-                strb.append( "---MB SGD step: " + step + "\n");
+                strb.append("---MB SGD learning rate: " + learningRate + "\n");
+                strb.append("---MB SGD regularization param: " + regPar + "\n");
+                strb.append("---MB SGD step: " + step + "\n");
 
                 mbsgd.setLearningRate(learningRate);
                 mbsgd.setRegularizationParameter(regPar);

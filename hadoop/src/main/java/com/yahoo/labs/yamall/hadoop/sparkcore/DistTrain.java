@@ -13,6 +13,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.storage.StorageLevel;
 
 import java.io.File;
 import java.io.IOException;
@@ -188,6 +189,7 @@ public class DistTrain implements Serializable {
         String line = "";
 
         JavaRDD<String> input = sparkContext.textFile(inputDir);
+        input.persist(StorageLevel.MEMORY_AND_DISK());
         //long lineNum = input.count();
 
         //String line = "--- Number of training instance: " + lineNum + "\n";
@@ -203,6 +205,7 @@ public class DistTrain implements Serializable {
 
         // save example to hdfs
         JavaRDD<String> subsampTrain = input.sample(false, fraction);
+        subsampTrain.persist(StorageLevel.MEMORY_AND_DISK());
         //JavaRDD<String> subsampTest = input.sample(false,fraction);
         //DataFrame wordsDataFrame = spark.createDataFrame(subsamp, String.class);
 
