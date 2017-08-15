@@ -51,6 +51,10 @@ public class SVRG implements Learner {
         lastUpdated = new int[size_hash];
     }
 
+    public void setBatchSize(int size) {
+        this.batchSize = size;
+    }
+
     private int getSGDPhaseLength() {
         return batchSize/10;
     }
