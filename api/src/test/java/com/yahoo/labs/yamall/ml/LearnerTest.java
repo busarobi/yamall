@@ -83,6 +83,7 @@ public class LearnerTest {
         Assert.assertTrue(learnerLogisticLossTest(new SGD_FM(1, 8), iter) < 0);
         Assert.assertTrue(learnerLogisticLossTest(new PerCoordinateFreeRex(1), iter) < 0);
         Assert.assertTrue(learnerLogisticLossTest(new SVRG(1), iter) < 0);
+        Assert.assertTrue(learnerLogisticLossTest(new PerCoordinateSVRG(1), iter) < 0);
     }
 
 }
