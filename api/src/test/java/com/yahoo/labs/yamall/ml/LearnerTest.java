@@ -3,18 +3,12 @@
 // Please see LICENSE file in the project root for terms.
 package com.yahoo.labs.yamall.ml;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
-
+import com.yahoo.labs.yamall.core.Instance;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 import org.unitils.reflectionassert.ReflectionAssert;
 
-import com.yahoo.labs.yamall.core.Instance;
+import java.io.*;
 
 public class LearnerTest {
 
@@ -87,6 +81,7 @@ public class LearnerTest {
         Assert.assertTrue(learnerLogisticLossTest(new PerCoordinateCOCOB(1), iter) < 0);
         Assert.assertTrue(learnerLogisticLossTest(new PerCoordinateKT(1), iter) < 0);
         Assert.assertTrue(learnerLogisticLossTest(new SGD_FM(1, 8), iter) < 0);
+        Assert.assertTrue(learnerLogisticLossTest(new PerCoordinateFreeRex(1), iter) < 0);
     }
 
 }
