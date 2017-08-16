@@ -81,6 +81,10 @@ public class Yamall {
                 .desc("(EXPERIMENTAL) uses Per Coordinate KT optimizer").build());
         options.addOption(Option.builder().hasArg(false).required(false).longOpt("pccocob")
                 .desc("(EXPERIMENTAL) uses Per Coordinate COCOB optimizer").build());
+        options.addOption(Option.builder().hasArg(false).required(false).longOpt("pcfreerex")
+                .desc("(EXPERIMENTAL) uses Per Coordinate FreeRex optimizer").build());
+        options.addOption(Option.builder().hasArg(false).required(false).longOpt("svrg")
+                .desc("(EXPERIMENTAL) uses SVRG optimizer").build());
         options.addOption(Option.builder().hasArg(false).required(false).longOpt("cocob")
                 .desc("(EXPERIMENTAL) uses COCOB optimizer").build());
         options.addOption(Option.builder().hasArg(false).required(false).longOpt("fm")
@@ -251,6 +255,9 @@ public class Yamall {
             }
             else if (cmd.hasOption("pcfreerex")) {
                 learner = new PerCoordinateFreeRex(bitsHash);
+            }
+            else if (cmd.hasOption("svrg")) {
+                learner = new SVRG(bitsHash);
             }
             else
                 learner = new SGD_VW(bitsHash);
