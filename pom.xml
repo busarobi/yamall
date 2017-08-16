@@ -13,7 +13,8 @@
 		<module>examples</module>
 		<module>local</module>
 		<module>hadoop</module>
-	</modules>
+        <module>synthetic-test</module>
+    </modules>
 	
 	<build>
 	</build>

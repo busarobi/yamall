@@ -1,0 +1,6 @@
+data_type=default
+method=SGD_VW
+lr=1.0
+threads=5
+
+output=./output/
