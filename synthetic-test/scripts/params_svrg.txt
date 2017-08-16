@@ -1,6 +1,7 @@
 # learner parameters
-method=SGD_VW
+method=SVRG
 lr=1.0
+batchsize=1000
 
 # run
 threads=10

@@ -1,5 +1,5 @@
 # learner parameters
-method=SGD_VW
+method=free_rex
 lr=1.0
 
 # run

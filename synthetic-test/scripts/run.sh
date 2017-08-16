@@ -1,1 +1,2 @@
-java -classpath ../target/yamall-synthetic-test-jar-with-dependencies.jar com.yahoo.labs.yamall.synthetic.TestLearners params_sgd_vw.txt
+#java -classpath ../target/yamall-synthetic-test-jar-with-dependencies.jar com.yahoo.labs.yamall.synthetic.TestLearners params_sgd_vw.txt
+java -classpath ../target/yamall-synthetic-test-jar-with-dependencies.jar com.yahoo.labs.yamall.synthetic.TestLearners params_pistol.txt

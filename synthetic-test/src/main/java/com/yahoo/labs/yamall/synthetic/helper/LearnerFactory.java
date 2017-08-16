@@ -34,9 +34,19 @@ public class LearnerFactory {
             PerCoordinateFreeRex l = new PerCoordinateFreeRex(bitsHash);
             l.useScaling(scaling);
             l.useWeightScaling(wscaling);
-            learner = l;
+            l.setLearningRate(learningRate);
 
-            learner.setLearningRate(learningRate);
+            learner = l;
+        } else if ( method .compareToIgnoreCase("SVRG") == 0) {
+            int batchSize = Integer.parseInt(properties.getProperty("batchsize", "1000"));
+
+            System.out.println( "SVRG learning rate: " + learningRate);
+
+            SVRG l = new SVRG(bitsHash);
+            l.setBatchSize(batchSize);
+            l.setLearningRate(learningRate);
+
+            learner = l;
         } else if ( method .compareToIgnoreCase("SOLO") == 0) {
             System.out.println( "SOLO learning rate: " + learningRate);
 
