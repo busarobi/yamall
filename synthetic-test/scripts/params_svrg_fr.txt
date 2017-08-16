@@ -1,11 +1,11 @@
 # learner parameters
-method=SVRG
+method=SVRG_FR
 lr=1.0
 batchsize=1000
 
 # run
-threads=10
-repetitions=10
+threads=5
+repetitions=5
 evalPeriod=1000
 
 # data generation

@@ -15,7 +15,7 @@ public class DataGeneratorFactory {
     }
 
     public static DataPair getDataGenerator(Properties properties ) {
-        int trainSize = Integer.parseInt(properties.getProperty("tain_size", "5000000"));
+        int trainSize = Integer.parseInt(properties.getProperty("train_size", "5000000"));
         int testSize = Integer.parseInt(properties.getProperty("test_size", "50000"));
 
         String dataType = properties.getProperty("data_type", "default");

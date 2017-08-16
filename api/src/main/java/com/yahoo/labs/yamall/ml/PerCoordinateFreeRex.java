@@ -16,7 +16,7 @@ import java.io.ObjectOutputStream;
  */
 
 @SuppressWarnings("serial")
-public class PerCoordinateFreeRex implements Learner {
+public class PerCoordinateFreeRex implements SVRGLearner {
     private transient double[] maxGrads;
     private transient double[] inverseEtaSq;
     private transient double[] sumGrads;
@@ -47,6 +47,22 @@ public class PerCoordinateFreeRex implements Learner {
 
     }
 
+    public double[] getDenseWeights() {
+        return w;
+    }
+    public void setCenter(double center[]) {
+        for (int i=0; i<size_hash; i++) {
+            this.center[i] = center[i];
+        }
+    }
+
+    public void reset() {
+        for (int i=0; i<size_hash; i++) {
+            this.inverseEtaSq[i] = 0.0;
+            this.sumGrads[i] = 0.0;
+            this.w[i] = center[i];
+        }
+    }
 
     public double update(Instance sample) {
         iter++;
@@ -60,7 +76,7 @@ public class PerCoordinateFreeRex implements Learner {
 
         for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
             double negativeGrad_i = entry.getDoubleValue() * negativeGrad;
-            batch_update_coord(entry.getIntKey(),negativeGrad_i, 1);
+            batchUpdateCoordinate(entry.getIntKey(),negativeGrad_i, 1);
         }
 
         return pred;
@@ -115,7 +131,17 @@ public class PerCoordinateFreeRex implements Learner {
         this.useWeightScaling = flag;
     }
 
-    public void batch_update_coord(int key, double negativeGrad, int missed_steps) {
+    public void updateFromNegativeGrad(Instance sample, SparseVector negativeGrad) {
+        updateScalingVector(sample);
+        for (Int2DoubleMap.Entry entry : negativeGrad.int2DoubleEntrySet()) {
+            int key = entry.getIntKey();
+            double negativeGrad_i = entry.getDoubleValue();
+            batchUpdateCoordinate(key, negativeGrad_i, 1);
+        }
+
+    }
+
+    public void batchUpdateCoordinate(int key, double negativeGrad, int missed_steps) {
         // useful for SVRG lazy update.
         if (Math.abs(negativeGrad) > 1e-8 && missed_steps > 0) {
             double sumGrads_i = sumGrads[key];

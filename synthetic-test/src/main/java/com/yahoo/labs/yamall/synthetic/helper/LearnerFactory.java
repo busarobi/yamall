@@ -47,6 +47,16 @@ public class LearnerFactory {
             l.setLearningRate(learningRate);
 
             learner = l;
+        } else if ( method .compareToIgnoreCase("SVRG_FR") == 0) {
+            int batchSize = Integer.parseInt(properties.getProperty("batchsize", "1000"));
+
+            System.out.println( "SVRG_FR learning rate: " + learningRate);
+
+            PerCoordinateSVRG l = new PerCoordinateSVRG(bitsHash);
+            l.setBatchSize(batchSize);
+            l.setLearningRate(learningRate);
+
+            learner = l;
         } else if ( method .compareToIgnoreCase("SOLO") == 0) {
             System.out.println( "SOLO learning rate: " + learningRate);
 
