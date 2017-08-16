@@ -178,7 +178,7 @@ public class TestLearners implements JobParallelLauncher.JobRunner {
 
     public static void main(String[] args) throws IOException {
         if (args.length < 1) {
-            System.out.println("Usage: java -classpath yamall-examples-jar-with-dependencies.jar com.yahoo.labs.yamall.synthetic.TestLearners properyfile");
+            System.out.println("Usage: java -classpath yamall-synthetic-test-jar-with-dependencies.jar com.yahoo.labs.yamall.synthetic.TestLearners properyfile");
             System.exit(0);
         }
 
