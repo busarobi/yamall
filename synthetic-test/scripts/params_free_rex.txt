@@ -8,7 +8,7 @@ repetitions=10
 evalPeriod=1000
 
 # data generation
-tain_size=10000000
+train_size=10000000
 test_size=50000
 
 data_type=default
