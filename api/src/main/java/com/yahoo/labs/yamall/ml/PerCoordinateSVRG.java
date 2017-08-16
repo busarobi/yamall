@@ -67,7 +67,7 @@ public class PerCoordinateSVRG implements Learner {
     private void useReset(boolean flag) { this.doUseReset = flag; }
 
     private int getSGDPhaseLength() {
-        return batchSize;
+        return batchSize/10;
     }
 
     private int getBurnInLength() {
