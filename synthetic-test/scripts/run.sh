@@ -4,3 +4,5 @@ java -classpath ../target/yamall-synthetic-test-jar-with-dependencies.jar com.ya
 java -classpath ../target/yamall-synthetic-test-jar-with-dependencies.jar com.yahoo.labs.yamall.synthetic.TestLearners params_svrg_fr.txt
 java -classpath ../target/yamall-synthetic-test-jar-with-dependencies.jar com.yahoo.labs.yamall.synthetic.TestLearners params_solo.txt
 java -classpath ../target/yamall-synthetic-test-jar-with-dependencies.jar com.yahoo.labs.yamall.synthetic.TestLearners params_free_rex.txt
+java -classpath ../target/yamall-synthetic-test-jar-with-dependencies.jar com.yahoo.labs.yamall.synthetic.TestLearners params_dense_svrg_fr.txt
+java -classpath ../target/yamall-synthetic-test-jar-with-dependencies.jar com.yahoo.labs.yamall.synthetic.TestLearners params_dense_free_rex.txt

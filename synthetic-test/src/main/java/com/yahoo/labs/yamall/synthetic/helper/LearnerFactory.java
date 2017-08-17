@@ -37,6 +37,18 @@ public class LearnerFactory {
             l.setLearningRate(learningRate);
 
             learner = l;
+        } else if ( method .compareToIgnoreCase("DENSE_FREE_REX") == 0) {
+            boolean scaling = Boolean.parseBoolean(properties.getProperty("scaling", "false"));
+            boolean wscaling = Boolean.parseBoolean(properties.getProperty("wscaling", "true"));
+
+            System.out.println( "DENSE FREE REX learning rate: " + learningRate);
+
+            FreeRex l = new FreeRex(bitsHash);
+            l.useScaling(scaling);
+            l.useWeightScaling(wscaling);
+            l.setLearningRate(learningRate);
+
+            learner = l;
         } else if ( method .compareToIgnoreCase("SVRG") == 0) {
             int batchSize = Integer.parseInt(properties.getProperty("batchsize", "1000"));
 
@@ -53,6 +65,16 @@ public class LearnerFactory {
             System.out.println( "SVRG_FR learning rate: " + learningRate);
 
             PerCoordinateSVRG l = new PerCoordinateSVRG(bitsHash);
+            l.setBatchSize(batchSize);
+            l.setLearningRate(learningRate);
+
+            learner = l;
+        } else if ( method .compareToIgnoreCase("DENSE_SVRG") == 0) {
+            int batchSize = Integer.parseInt(properties.getProperty("batchsize", "1000"));
+
+            System.out.println( "DENSE_SVRG learning rate: " + learningRate);
+
+            DenseSVRG l = new DenseSVRG(bitsHash);
             l.setBatchSize(batchSize);
             l.setLearningRate(learningRate);
 
