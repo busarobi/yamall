@@ -38,6 +38,7 @@ public class FreeRex implements DenseSVRGLearner {
     private int batchGradDotGradSum_Iterations = 0;
     private double batchGradNormSquared = 0;
     private double gradSumNormSquared = 0;
+    private int gradSumNormSquared_Iterations = 0;
 
     private int[] lastUpdated;
 
@@ -67,14 +68,6 @@ public class FreeRex implements DenseSVRGLearner {
         }
     }
 
-    public void reset() {
-        for (int i = 0; i < size_hash; i++) {
-            this.inverseEtaSq = 0.0;
-            this.negativeGradSum[i] = 0.0;
-            this.w[i] = center[i];
-        }
-    }
-
 
     /**
      * S = sum of gradients.
@@ -89,6 +82,7 @@ public class FreeRex implements DenseSVRGLearner {
      * @param negativeGrad
      */
     private double updateBatchGradDotGradSum(SparseVector negativeGrad) {
+        assert batchGradDotGradSum_Iterations < gradSumNormSquared_Iterations;
         batchGradDotGradSum_Iterations++;
         batchGradDotGradSum += negativeGrad.dot(negativeBatchGrad) + batchGradNormSquared;
         return batchGradDotGradSum;
@@ -118,6 +112,8 @@ public class FreeRex implements DenseSVRGLearner {
      * @param negativeGrad
      */
     private double updateGradSumNormSquared(SparseVector negativeGrad) {
+        assert batchGradDotGradSum_Iterations == gradSumNormSquared_Iterations;
+        gradSumNormSquared_Iterations++;
         gradSumNormSquared += getGradientNormSquared(negativeGrad) +
                 2 * negativeGrad.dot(negativeGradSum) +
                 2 * batchGradDotGradSum;
@@ -134,22 +130,28 @@ public class FreeRex implements DenseSVRGLearner {
         }
     }
 
-    private void updateGradSum(SparseVector negativeGrad) {
-        for (Int2DoubleMap.Entry entry : negativeGrad.int2DoubleEntrySet()) {
-            int key = entry.getIntKey();
-            int missedSteps = iterations - lastUpdated[key];
-            negativeGradSum[key] += missedSteps * negativeBatchGrad[key] + entry.getDoubleValue();
-            lastUpdated[key] = iterations;
+    public void reset() {
+        batchGradDotGradSum = 0;
+        gradSumNormSquared = 0;
+        batchGradDotGradSum_Iterations = 0;
+        gradSumNormSquared_Iterations = 0;
+        iterations = 0;
+        this.inverseEtaSq = 0.0;
+        for (int i = 0; i < size_hash; i++) {
+            this.negativeGradSum[i] = 0.0;
+            this.w[i] = center[i];
+            this.lastUpdated[i] = 0;
         }
     }
 
 
     public double update(Instance sample) {
-        if(useWeightScaling) {
-            updateScalingVector(sample);
-        }
-        lazySparseUpdate(sample.getVector());
+
+
+
         double pred = predict(sample);
+        updateScalingVector(sample);
+
 
         final double negativeGrad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
         int[] keys = new int[sample.getVector().size()];
@@ -170,17 +172,15 @@ public class FreeRex implements DenseSVRGLearner {
     This scaling is similar to the one applied in normalized gradient descent, see SGD_VW
      */
     public void updateScalingVector(Instance sample) {
-        for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
-            int key = entry.getIntKey();
-            double value = Math.abs(entry.getDoubleValue());
-            if (value > weightScaling[key])
-                weightScaling[key] = value;
+        if (useWeightScaling) {
+            for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
+                int key = entry.getIntKey();
+                double value = Math.abs(entry.getDoubleValue());
+                if (value > weightScaling[key])
+                    weightScaling[key] = value;
+
+            }
         }
-    }
-
-
-    public double predict(Instance sample) {
-        return sample.getVector().dot(w);
     }
 
     public Loss getLoss() {
@@ -223,7 +223,7 @@ public class FreeRex implements DenseSVRGLearner {
         iterations++;
         updateGradSumNormSquared(negativeGrad);
         updateBatchGradDotGradSum(negativeGrad);
-        updateGradSum(negativeGrad);
+        updateGradSum(negativeGrad, iterations);
         double gradNormSquared = getGradientNormSquared(negativeGrad);
         double gradSumNorm = Math.sqrt(gradSumNormSquared);
 
@@ -244,11 +244,13 @@ public class FreeRex implements DenseSVRGLearner {
     }
 
     private double getOffset(int key) {
+        assert gradSumNormSquared_Iterations == batchGradDotGradSum_Iterations;
+        assert gradSumNormSquared_Iterations == iterations;
         double gradSumNorm = Math.sqrt(gradSumNormSquared);
         double offset = 0;
         if(inverseEtaSq > 1e-8) {
             offset = negativeGradSum[key] / gradSumNorm * (Math.exp(k_inv * gradSumNorm / Math.sqrt(inverseEtaSq)) - 1.0);
-            if (useWeightScaling)
+            if (useWeightScaling && weightScaling[key]>0)
                 offset /= weightScaling[key];
 
             if (useScaling)
@@ -257,9 +259,24 @@ public class FreeRex implements DenseSVRGLearner {
         return offset;
     }
 
-    public void lazySparseUpdate(SparseVector sampleVector) {
+    private void updateGradSum(SparseVector negativeGrad, int updateTo) {
+        for (Int2DoubleMap.Entry entry : negativeGrad.int2DoubleEntrySet()) {
+            int key = entry.getIntKey();
+            double value = entry.getDoubleValue();
+            updateGradSumCoord(key, value, updateTo);
+        }
+    }
+
+    private void updateGradSumCoord(int key, double sparseGrad, int updateTo) {
+        int missedSteps = updateTo - lastUpdated[key];
+        negativeGradSum[key] += missedSteps * negativeBatchGrad[key] + sparseGrad;
+        lastUpdated[key] = updateTo;
+    }
+
+    private void lazySparseUpdate(SparseVector sampleVector) {
         for (Int2DoubleMap.Entry entry : sampleVector.int2DoubleEntrySet()) {
             int i = entry.getIntKey();
+            updateGradSumCoord(i, 0, iterations);
             double offset = getOffset(i);
             w[i] = center[i] + offset;
         }
@@ -267,11 +284,16 @@ public class FreeRex implements DenseSVRGLearner {
 
     public void lazyUpdate() {
         for (int i = 0; i < size_hash; i++) {
+            updateGradSumCoord(i, 0, iterations);
             double offset = getOffset(i);
             w[i] = center[i] + offset;
         }
     }
 
+    public double predict(Instance sample) {
+        lazySparseUpdate(sample.getVector());
+        return sample.getVector().dot(w);
+    }
 
     public String toString() {
         String tmp = "Using FreeRex optimizer\n";

@@ -35,6 +35,8 @@ public interface DenseSVRGLearner extends Learner {
      */
     double[] getDenseWeights();
 
+    void setNegativeBatchGrad(double[] gBatch);
+
     /**
      * performs missed updates
      */
