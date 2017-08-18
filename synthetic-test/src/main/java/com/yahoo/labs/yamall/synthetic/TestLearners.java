@@ -13,6 +13,7 @@ import java.io.BufferedWriter;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.time.ZoneOffset;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
@@ -160,8 +161,8 @@ public class TestLearners implements JobParallelLauncher.JobRunner {
 
         for( int i=0; i < numOfRepetitions; i++ ){
             String dataType = properties.getProperty("data_type", "default");
-
-            String postFix = String.format("r_%04d_%s_lr_%s", i, dataType, learningRate);
+            String timeStamp = java.time.Instant.now().toString();
+            String postFix = String.format("r_%04d_%s_lr_%s_time_%s", i, dataType, learningRate, timeStamp);
             String outputFile = fname + "/" + method + "_" + postFix + ".txt";
             System.out.println("Output: " + outputFile);
 

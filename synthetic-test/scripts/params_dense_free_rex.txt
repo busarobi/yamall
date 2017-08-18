@@ -1,0 +1,20 @@
+# learner parameters
+method=DENSE_FREE_REX
+lr=1.0
+batchsize=1000
+
+# run
+threads=5
+repetitions=5
+evalPeriod=1000
+
+# data generation
+train_size=10000000
+test_size=50000
+
+data_type=default
+dimension=1000
+sparsity=100
+
+
+output=./output/
