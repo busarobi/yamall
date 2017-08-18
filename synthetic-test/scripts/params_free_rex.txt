@@ -1,6 +1,6 @@
 # learner parameters
 method=free_rex
-lr=1.0
+lr=0.1
 
 # run
 threads=10

@@ -89,6 +89,7 @@ public class SVRG implements Learner {
         int missedSteps = updateTo - lastUpdated[key];
         if (missedSteps > 0) {
             w[key] += negativeBatchGradient[key] * missedSteps * eta;
+            lastUpdated[key] = updateTo;
         }
     }
 

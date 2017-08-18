@@ -1,6 +1,6 @@
 # learner parameters
 method=SVRG
-lr=1.0
+lr=0.1
 batchsize=1000
 
 # run

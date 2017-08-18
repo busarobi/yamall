@@ -78,6 +78,7 @@ public class PerCoordinateSVRG implements Learner {
 
         gatherGradientIter++;
 
+        // updateing the scaling vector TODO: this should be made more explicit
         baseLearner.updateFromNegativeGrad(sample, new SparseVector());
 
         double pred_prev = predict_previous(sample);
