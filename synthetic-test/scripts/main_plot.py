@@ -8,7 +8,7 @@ import os, sys
 
 methods = ['SGD_VW', 'Pistol', 'SOLO', 'SVRG', 'SVRG_FR', 'free_rex']
 data_type = 'default'
-lr = 1.0
+lr = 0.1
 result_for_plot = {}
 for m in methods:
     results = []
@@ -68,6 +68,6 @@ plt.xlabel('epoch')
 plt.legend(leg, loc='upper right')
 plt.grid(True)
 
-pp = PdfPages('./comp.pdf')
+pp = PdfPages(( './comp_lr_%0.1f.pdf' % lr ) )
 plt.savefig(pp, format='pdf')
 pp.close()
