@@ -25,9 +25,16 @@ public class PerCoordinateSVRG implements Learner {
     private int state = 0;
     private transient double[] negativeBatchGradient;
     private transient double[] w_previous;
+    private transient double[] batchGradVariance;
+
+    private transient double[] featureScalings;
+
+    double regularizationScaling = 0;
 
     private double[] featureCounts;
     private int totalSamplesSeen = 0;
+
+    private int[] lastUpdated;
 
     private boolean doUseReset = false;
 
@@ -36,8 +43,9 @@ public class PerCoordinateSVRG implements Learner {
     private int gatherGradientIter = 0;
     private int SGDIter = 0;
     private int BurnInIter = 0;
+    private int totalSGDIter = 0;
 
-    private double batchGradVariance = 0.0; //this is probably useful for testing
+    //private double batchGradVariance = 0.0; //this is probably useful for testing
 
     private Loss lossFnc;
     public double iter = 0;
@@ -62,16 +70,31 @@ public class PerCoordinateSVRG implements Learner {
         negativeBatchGradient = new double[size_hash];
         w_previous = new double[size_hash];
         featureCounts = new double[size_hash];
+        lastUpdated = new int[size_hash];
+        batchGradVariance = new double[size_hash];
+        featureScalings = new double[size_hash];
     }
 
     private void useReset(boolean flag) { this.doUseReset = flag; }
 
     private int getSGDPhaseLength() {
-        return batchSize/10;
+        return batchSize;
+    }
+
+    private int getBatchLength() {
+        return Math.max(batchSize, totalSGDIter);
     }
 
     private int getBurnInLength() {
         return batchSize;
+    }
+
+    private void updateFeatureScaling(SparseVector featureVector) {
+        for (Int2DoubleMap.Entry entry : featureVector.int2DoubleEntrySet()) {
+            int key = entry.getIntKey();
+            double value = entry.getDoubleValue();
+            featureScalings[key] = Math.max(featureScalings[key], value);
+        }
     }
 
     private double updateBatchGradient(Instance sample) {
@@ -79,14 +102,34 @@ public class PerCoordinateSVRG implements Learner {
         gatherGradientIter++;
 
         // updateing the scaling vector TODO: this should be made more explicit
-        baseLearner.updateFromNegativeGrad(sample, new SparseVector());
+        updateFeatureScaling(sample.getVector());
+        //baseLearner.updateFromNegativeGrad(sample.getVector(), new SparseVector());
 
         double pred_prev = predict_previous(sample);
 
         double negativeGrad = lossFnc.negativeGradient(pred_prev, sample.getLabel(), sample.getWeight());
 
-        sample.getVector().addScaledSparseVectorToDenseVector(negativeBatchGradient, negativeGrad);
-        batchGradVariance += sample.getVector().squaredL2Norm() * negativeGrad * negativeGrad;
+        for(Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
+            int key = entry.getIntKey();
+            double x_i = entry.getDoubleValue();
+            double negativeGrad_i = x_i * negativeGrad;
+            double currentAverage = negativeBatchGradient[key];
+            if(lastUpdated[key] < gatherGradientIter - 1)
+                currentAverage *= ((double) lastUpdated[key]/ (double)(gatherGradientIter-1));
+            currentAverage += (negativeGrad_i - currentAverage) / gatherGradientIter;
+            lastUpdated[key] = gatherGradientIter;
+            negativeBatchGradient[key] = currentAverage;
+        }
+
+
+        for(Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
+            int key = entry.getIntKey();
+            double x_i = entry.getDoubleValue();
+            double negativeGrad_i = x_i * negativeGrad;
+            batchGradVariance[key] += negativeGrad_i * negativeGrad_i;
+        }
+//        sample.getVector().addScaledSparseVectorToDenseVector(negativeBatchGradient, negativeGrad);
+//        batchGradVariance += sample.getVector().squaredL2Norm() * negativeGrad * negativeGrad;
 
 
         return pred_prev;
@@ -94,12 +137,16 @@ public class PerCoordinateSVRG implements Learner {
 
     private double updateBurnIn(Instance sample) {
         BurnInIter ++;
+        totalSGDIter ++;
 
         double pred = baseLearner.update(sample);
 
         return pred;
     }
 
+    public void setRegularizationScaling(double reg) {
+        regularizationScaling = reg;
+    }
     public void setBatchSize(int size) {
         this.batchSize = size;
     }
@@ -107,9 +154,12 @@ public class PerCoordinateSVRG implements Learner {
     private double updateSGDStep(Instance sample) {
 
         SGDIter++;
+        totalSGDIter++;
 
         double pred = predict(sample);
         double pred_prev = predict_previous(sample);
+
+        updateBatchGradient(sample);
 
         double negativeGrad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
         double negativeGrad_prev = lossFnc.negativeGradient(pred_prev, sample.getLabel(), sample.getWeight());
@@ -118,11 +168,13 @@ public class PerCoordinateSVRG implements Learner {
         double values[] = new double[sample.getVector().size()];
         int i = 0;
 
+        double [] weights = baseLearner.getDenseWeights();
+
         for(Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
             int key = entry.getIntKey();
             double x_i = entry.getDoubleValue();
             keys[i] = key;
-            double varianceReducedNegativeGrad_i = x_i*(negativeGrad - negativeGrad_prev) + negativeBatchGradient[key] * totalSamplesSeen / featureCounts[key];
+            double varianceReducedNegativeGrad_i = x_i*(negativeGrad - negativeGrad_prev) + (negativeBatchGradient[key] - regularizationScaling * Math.log(size_hash) * batchGradVariance[key] * Math.signum(weights[key])) * totalSamplesSeen / featureCounts[key] ;
 
             if (Math.abs(varianceReducedNegativeGrad_i) > 1e-8) {
                 values[i] = varianceReducedNegativeGrad_i;
@@ -130,7 +182,7 @@ public class PerCoordinateSVRG implements Learner {
             i++;
         }
 
-        baseLearner.updateFromNegativeGrad(sample, new SparseVector(keys, values));
+        baseLearner.updateFromNegativeGrad(sample.getVector(), new SparseVector(keys, values));
 
         return pred;
     }
@@ -139,16 +191,23 @@ public class PerCoordinateSVRG implements Learner {
 
         double negativeBatchGradientNorm = 0.0;
         for (int i=0; i<size_hash; i++) {
-            negativeBatchGradient[i] /= gatherGradientIter;
+//            negativeBatchGradient[i] /= gatherGradientIter;
+
+            if (lastUpdated[i] < gatherGradientIter)
+                negativeBatchGradient[i] *= (double)lastUpdated[i]/(double)gatherGradientIter;
+            lastUpdated[i] = gatherGradientIter;
             negativeBatchGradientNorm += negativeBatchGradient[i]*negativeBatchGradient[i];
+            batchGradVariance[i] = Math.sqrt((batchGradVariance[i]/gatherGradientIter - negativeBatchGradient[i]*negativeBatchGradient[i])/(gatherGradientIter - 1));
         }
         SGDIter = 0;
-        batchGradVariance = (batchGradVariance/gatherGradientIter - negativeBatchGradientNorm)/(gatherGradientIter - 1);
+//        batchGradVariance = (batchGradVariance/gatherGradientIter - negativeBatchGradientNorm)/(gatherGradientIter - 1);
 
         if (doUseReset) {
             baseLearner.setCenter(w_previous);
             baseLearner.reset();
         }
+        //baseLearner.setRegularization(batchGradVariance, regularizationScaling * Math.sqrt(Math.log(size_hash)) * getSGDPhaseLength());
+        baseLearner.updateFromNegativeGrad(SparseVector.dense2Sparse(featureScalings),  SparseVector.dense2Sparse(negativeBatchGradient));
     }
 
     private void endSGDPhase() {
@@ -157,11 +216,15 @@ public class PerCoordinateSVRG implements Learner {
         for (int i=0; i<size_hash; i++) {
             w_previous[i] = temp[i];
             negativeBatchGradient[i] = 0.0;
+            lastUpdated[i] = 0;
+
+            batchGradVariance[i] = 0.0;
+            featureScalings[i] = 0.0;
 
         }
 
         gatherGradientIter = 0;
-        batchGradVariance = 0.0;
+//        batchGradVariance = 0.0;
     }
 
     private double chooseActionFromState(Instance sample) {
@@ -186,9 +249,10 @@ public class PerCoordinateSVRG implements Learner {
         for (int i=0; i<size_hash; i++) {
             w_previous[i] = temp[i];
             negativeBatchGradient[i] = 0.0;
+            batchGradVariance[i] = 0.0;
         }
         gatherGradientIter = 0;
-        batchGradVariance = 0.0;
+//        batchGradVariance = 0.0;
     }
 
     private void chooseState() {
@@ -200,7 +264,7 @@ public class PerCoordinateSVRG implements Learner {
                 }
                 break;
             case GATHER_GRADIENT:
-                if (gatherGradientIter >= batchSize) {
+                if (gatherGradientIter >= getBatchLength()) {
                     endBatchPhase();
                     state = SGD_PHASE;
                 }

@@ -20,7 +20,7 @@ public interface SVRGLearner extends Learner {
      * @param sample
      * @param negativeGrad
      */
-    void updateFromNegativeGrad(Instance sample, SparseVector negativeGrad);
+    void updateFromNegativeGrad(SparseVector featureVector, SparseVector negativeGrad);
 
 
     /**
@@ -46,4 +46,6 @@ public interface SVRGLearner extends Learner {
      * @param missed_steps
      */
     void batchUpdateCoordinate(int key, double negativeGrad, int missed_steps);
+
+    void setRegularization(double [] regularization, double scale);
 }
