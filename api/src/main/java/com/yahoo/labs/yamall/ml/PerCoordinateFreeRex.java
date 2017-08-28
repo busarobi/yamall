@@ -24,8 +24,6 @@ public class PerCoordinateFreeRex implements SVRGLearner {
     private transient double[] center;
     private transient double[] w;
 
-    private transient double[] regularization;
-
     private boolean useScaling = false;
     private boolean useWeightScaling = true;
 
@@ -47,7 +45,6 @@ public class PerCoordinateFreeRex implements SVRGLearner {
         w = new double[size_hash];
         center = new double[size_hash]; //default 0, but allows for FTRL with arbitrary centering.
 
-        regularization = new double[size_hash];
 
     }
 
@@ -57,12 +54,6 @@ public class PerCoordinateFreeRex implements SVRGLearner {
     public void setCenter(double center[]) {
         for (int i=0; i<size_hash; i++) {
             this.center[i] = center[i];
-        }
-    }
-
-    public void setRegularization(double [] regularization, double scale) {
-        for (int i=0; i<size_hash; i++) {
-            this.regularization[i] = regularization[i] * scale;
         }
     }
 
@@ -157,7 +148,6 @@ public class PerCoordinateFreeRex implements SVRGLearner {
             double sumGrads_i = sumGrads[key];
             double maxGrads_i = maxGrads[key];
             double inverseEtaSq_i = inverseEtaSq[key];
-            double regularization_i = regularization[key];
 
             sumGrads_i += missed_steps * negativeGrad;
             maxGrads_i = Math.max(maxGrads_i, Math.abs(negativeGrad));
@@ -169,7 +159,7 @@ public class PerCoordinateFreeRex implements SVRGLearner {
             inverseEtaSq[key] = inverseEtaSq_i;
 
             if (inverseEtaSq_i>1e-7) {
-                double offset = (Math.signum(sumGrads_i)) * (Math.exp(k_inv * Math.abs(sumGrads_i) / (Math.sqrt(inverseEtaSq_i) + regularization_i)) - 1.0);
+                double offset = (Math.signum(sumGrads_i)) * (Math.exp(k_inv * Math.abs(sumGrads_i) / (Math.sqrt(inverseEtaSq_i))) - 1.0);
 
                 if (useScaling) {
                     double scaling_i = scaling[key];

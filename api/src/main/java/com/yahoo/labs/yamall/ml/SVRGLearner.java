@@ -47,5 +47,4 @@ public interface SVRGLearner extends Learner {
      */
     void batchUpdateCoordinate(int key, double negativeGrad, int missed_steps);
 
-    void setRegularization(double [] regularization, double scale);
 }
