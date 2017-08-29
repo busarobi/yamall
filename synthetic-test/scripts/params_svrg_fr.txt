@@ -1,7 +1,7 @@
 # learner parameters
 method=SVRG_FR
 lr=0.1
-batchsize=1000
+batchsize=10000
 
 # run
 threads=10

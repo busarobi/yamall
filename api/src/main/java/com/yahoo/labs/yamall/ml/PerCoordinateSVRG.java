@@ -52,7 +52,7 @@ public class PerCoordinateSVRG implements Learner {
     private int size_hash = 0;
 
     private double eta = 0.01;
-    private int batchSize = 1000;
+    private int SGDSize = 1000;
 
     public PerCoordinateSVRG(int bits) {
         this.baseLearner = new PerCoordinateFreeRex(bits);
@@ -78,15 +78,15 @@ public class PerCoordinateSVRG implements Learner {
     private void useReset(boolean flag) { this.doUseReset = flag; }
 
     private int getSGDPhaseLength() {
-        return batchSize;
+        return SGDSize;
     }
 
     private int getBatchLength() {
-        return Math.max(batchSize, totalSGDIter);
+        return Math.max(SGDSize, totalSGDIter);
     }
 
     private int getBurnInLength() {
-        return batchSize;
+        return SGDSize;
     }
 
     private void updateFeatureScaling(SparseVector featureVector) {
@@ -140,8 +140,8 @@ public class PerCoordinateSVRG implements Learner {
     public void setRegularizationScaling(double reg) {
         regularizationScaling = reg;
     }
-    public void setBatchSize(int size) {
-        this.batchSize = size;
+    public void setSGDSize(int size) {
+        this.SGDSize = size;
     }
 
     private double updateSGDStep(Instance sample) {
@@ -312,7 +312,7 @@ public class PerCoordinateSVRG implements Learner {
     public String toString() {
         String tmp = "Using per-coordinate SVRG optimizer\n";
         tmp = tmp + "learning rate = " + eta + "\n";
-        tmp = tmp + "batch size = " + batchSize + "\n";
+        tmp = tmp + "batch size = " + SGDSize + "\n";
         tmp = tmp + "Loss function = " + getLoss().toString();
         return tmp;
     }

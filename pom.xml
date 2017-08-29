@@ -7,14 +7,20 @@
 	<version>1.0</version>
 	<name>yamall-parent</name>
 	<description>Yet Another MAchine Learning Library - Parent</description>
-		
+
+	<properties>
+		<maven.compiler.source>1.8</maven.compiler.source>
+		<maven.compiler.target>1.8</maven.compiler.target>
+	</properties>
+
 	<modules>
 		<module>api</module>
 		<module>examples</module>
 		<module>local</module>
 		<module>hadoop</module>
         <module>synthetic-test</module>
-    </modules>
+		<module>spark</module>
+	</modules>
 	
 	<build>
 	</build>
