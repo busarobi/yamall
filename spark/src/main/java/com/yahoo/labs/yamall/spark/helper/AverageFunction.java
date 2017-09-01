@@ -9,15 +9,17 @@ import java.io.Serializable;
  */
 public class AverageFunction {
     public static class AvgCount implements Serializable {
-        public AvgCount(double val, int num) {
+        public double val_;
+        public long num_;
+
+        public AvgCount(double val, long num) {
             val_ = val;
             num_ = num;
         }
-        public double val_;
-        public int num_;
         public double avg() {
             return val_ / (double) num_;
         }
+        public long getNum() { return num_; }
     }
 
     public static class AddandCount implements Function2<AvgCount, Double, AvgCount> {

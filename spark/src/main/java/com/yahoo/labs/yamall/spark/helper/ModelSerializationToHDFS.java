@@ -23,4 +23,16 @@ public class ModelSerializationToHDFS {
 
     }
 
+
+    private static final String MODEL_BIN = "model.bin";
+    public static Learner loadModel(String dir, String fname) throws IOException {
+        // move model to the node
+        FileSystem fileSystem = FileSystem.get(new Configuration());
+        fileSystem.copyToLocalFile(new Path(dir + fname), new Path(MODEL_BIN));
+
+        Learner learner = IOLearner.loadLearner(MODEL_BIN);
+        return learner;
+    }
+
+
 }

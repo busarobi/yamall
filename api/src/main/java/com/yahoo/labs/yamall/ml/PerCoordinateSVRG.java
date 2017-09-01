@@ -23,25 +23,25 @@ public class PerCoordinateSVRG implements Learner {
     private static final int SGD_PHASE = 2;
 
     private int state = 0;
-    private transient double[] negativeBatchGradient;
-    private transient double[] w_previous;
+    protected transient double[] negativeBatchGradient;
+    protected transient double[] w_previous;
     private transient double[] batchGradSquared;
 
-    private transient double[] featureScalings;
+    protected transient double[] featureScalings;
 
     double regularizationScaling = 0.0;
 
-    private double[] featureCounts;
-    private int totalSamplesSeen = 0;
+    protected double[] featureCounts;
+    protected long totalSamplesSeen = 0;
 
-    private int[] lastUpdated;
+    protected long[] lastUpdated;
 
-    private boolean doUseReset = false;
+    protected boolean doUseReset = false;
 
-    SVRGLearner baseLearner = null;
+    protected SVRGLearner baseLearner = null;
 
-    private int gatherGradientIter = 0;
-    private int SGDIter = 0;
+    protected long gatherGradientIter = 0;
+    protected int SGDIter = 0;
     private int BurnInIter = 0;
     private int totalSGDIter = 0;
 
@@ -49,7 +49,7 @@ public class PerCoordinateSVRG implements Learner {
 
     private Loss lossFnc;
     public double iter = 0;
-    private int size_hash = 0;
+    protected int size_hash = 0;
 
     private double eta = 0.01;
     private int SGDSize = 1000;
@@ -70,14 +70,14 @@ public class PerCoordinateSVRG implements Learner {
         negativeBatchGradient = new double[size_hash];
         w_previous = new double[size_hash];
         featureCounts = new double[size_hash];
-        lastUpdated = new int[size_hash];
+        lastUpdated = new long[size_hash];
         batchGradSquared = new double[size_hash];
         featureScalings = new double[size_hash];
     }
 
     private void useReset(boolean flag) { this.doUseReset = flag; }
 
-    private int getSGDPhaseLength() {
+    protected int getSGDPhaseLength() {
         return SGDSize;
     }
 
@@ -85,7 +85,7 @@ public class PerCoordinateSVRG implements Learner {
         return Math.max(SGDSize, totalSGDIter);
     }
 
-    private int getBurnInLength() {
+    protected int getBurnInLength() {
         return SGDSize;
     }
 
@@ -128,7 +128,7 @@ public class PerCoordinateSVRG implements Learner {
         return pred_prev;
     }
 
-    private double updateBurnIn(Instance sample) {
+    protected double updateBurnIn(Instance sample) {
         BurnInIter ++;
         totalSGDIter ++;
 
@@ -144,7 +144,7 @@ public class PerCoordinateSVRG implements Learner {
         this.SGDSize = size;
     }
 
-    private double updateSGDStep(Instance sample) {
+    protected double updateSGDStep(Instance sample) {
 
         SGDIter++;
         totalSGDIter++;

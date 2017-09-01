@@ -3,6 +3,7 @@ package com.yahoo.labs.yamall.spark;
 import com.yahoo.labs.yamall.core.Instance;
 import com.yahoo.labs.yamall.ml.Learner;
 import com.yahoo.labs.yamall.parser.VWParser;
+import com.yahoo.labs.yamall.spark.helper.Evaluate;
 import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
 import com.yahoo.labs.yamall.spark.helper.ModelSerializationToHDFS;
 import com.yahoo.labs.yamall.spark.helper.SparkLearnerFactory;
@@ -153,7 +154,8 @@ public class SparkSingleCoreTrain {
 
                 if (numSamples % evalPeriod == 0) {
                     double trainLoss = cumLoss / (double) numSamples;
-                    double testLoss = eval(hdfs, vwparser);
+                    //double testLoss = eval(hdfs, vwparser);
+                    double testLoss = Evaluate.getLoss(sparkContext,inputDirTest,learner, bitsHash);
                     long clusteringRuntime = System.currentTimeMillis() - clusterStartTime;
                     double elapsedTime = clusteringRuntime / 1000.0;
                     double elapsedTimeInhours = elapsedTime / 3600.0;
@@ -168,6 +170,21 @@ public class SparkSingleCoreTrain {
             }
         }
 
+
+        double trainLoss = cumLoss / (double) numSamples;
+        //double testLoss = eval(hdfs, vwparser);
+        double testLoss = Evaluate.getLoss(sparkContext,inputDirTest,learner, bitsHash);
+        long clusteringRuntime = System.currentTimeMillis() - clusterStartTime;
+        double elapsedTime = clusteringRuntime / 1000.0;
+        double elapsedTimeInhours = elapsedTime / 3600.0;
+
+        String line = String.format("%d %f %f %f\n", numSamples, trainLoss, testLoss, elapsedTimeInhours);
+        strb.append(line);
+        System.out.print(method + " " + line);
+
+        saveLog();
+
+
         if (saveModelFlag) {
             String modelFile = "/model.bin";
             ModelSerializationToHDFS.saveModel(outputDir, modelFile, learner);
@@ -175,48 +192,48 @@ public class SparkSingleCoreTrain {
 
     }
 
-    public static double eval(FileSystem hdfs, VWParser vwparser) throws IOException {
-        int numSamples = 0;
-        double score;
-        double cumLoss = 0.0;
-
-        Collections.shuffle(featureFilePathsTest);
-
-        for (Path featureFile : featureFilePathsTest) {
-            System.out.println("----- Starting test file " + featureFile + " Samp. num: " + numSamples);
-            strb.append("----- Starting test file " + featureFile + " Samp. num: " + numSamples + "\n");
-
-            BufferedReader br = null;
-            if (featureFile.getName().contains(".gz"))
-                br = new BufferedReader(new InputStreamReader(new GZIPInputStream(hdfs.open(featureFile))));
-            else
-                br = new BufferedReader(new InputStreamReader(hdfs.open(featureFile)));
-
-            for (; ; ) { // forever
-                String strLine = br.readLine();
-
-                Instance sample;
-
-                if (strLine != null) {
-                    sample = vwparser.parse(strLine);
-                } else
-                    break;
-
-
-                score = learner.predict(sample);
-                score = Math.min(Math.max(score, minPrediction), maxPrediction);
-
-                cumLoss += learner.getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
-
-                numSamples++;
-
-                if (numSamples>evalNumInstances) break;
-            }
-            if (numSamples>evalNumInstances) break;
-        }
-
-        return cumLoss / (double) numSamples;
-    }
+//    public static double eval(FileSystem hdfs, VWParser vwparser) throws IOException {
+//        int numSamples = 0;
+//        double score;
+//        double cumLoss = 0.0;
+//
+//        Collections.shuffle(featureFilePathsTest);
+//
+//        for (Path featureFile : featureFilePathsTest) {
+//            System.out.println("----- Starting test file " + featureFile + " Samp. num: " + numSamples);
+//            strb.append("----- Starting test file " + featureFile + " Samp. num: " + numSamples + "\n");
+//
+//            BufferedReader br = null;
+//            if (featureFile.getName().contains(".gz"))
+//                br = new BufferedReader(new InputStreamReader(new GZIPInputStream(hdfs.open(featureFile))));
+//            else
+//                br = new BufferedReader(new InputStreamReader(hdfs.open(featureFile)));
+//
+//            for (; ; ) { // forever
+//                String strLine = br.readLine();
+//
+//                Instance sample;
+//
+//                if (strLine != null) {
+//                    sample = vwparser.parse(strLine);
+//                } else
+//                    break;
+//
+//
+//                score = learner.predict(sample);
+//                score = Math.min(Math.max(score, minPrediction), maxPrediction);
+//
+//                cumLoss += learner.getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
+//
+//                numSamples++;
+//
+//                if (numSamples>evalNumInstances) break;
+//            }
+//            if (numSamples>evalNumInstances) break;
+//        }
+//
+//        return cumLoss / (double) numSamples;
+//    }
 
 
     public static void main( String[] args ) throws IOException {

@@ -3,7 +3,7 @@ package com.yahoo.labs.yamall.spark.gradient;
 import com.yahoo.labs.yamall.core.Instance;
 import com.yahoo.labs.yamall.ml.LogisticLoss;
 import com.yahoo.labs.yamall.ml.Loss;
-import com.yahoo.labs.yamall.parser.VWParser;
+import it.unimi.dsi.fastutil.ints.Int2DoubleMap;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.Function2;
 
@@ -21,7 +21,10 @@ public class BatchGradient {
         protected double[] localGbatch;
         protected int size_hash;
         protected double[] localw;
-        protected VWParser vwparser = null;
+
+        protected double[] featureMax;
+        protected long[] featureCounts;
+
         protected Loss lossFnc = new LogisticLoss();
         public long gatherGradIter = 0;
         public double cumLoss = 0.0;
@@ -34,7 +37,10 @@ public class BatchGradient {
             size_hash = 1 << bits;
             localw = new double[size_hash];
             for (int i = 0; i < size_hash; i++) localw[i] = weights[i];
+
             localGbatch = new double[size_hash];
+            featureCounts = new long[size_hash];
+            featureMax = new double[size_hash];
         }
 
         public double accumulateGradient(Instance sample) {
@@ -50,6 +56,17 @@ public class BatchGradient {
                 sample.getVector().addScaledSparseVectorToDenseVector(localGbatch, grad);
             }
             cumLoss += lossFnc.lossValue(pred, sample.getLabel()) * sample.getWeight();
+
+            for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
+                int key = entry.getIntKey();
+                double absVal = Math.abs(entry.getDoubleValue());
+                if ( absVal > featureMax[key])
+                    featureMax[key] = absVal;
+
+                featureCounts[key]++;
+            }
+
+
             return pred;
         }
 
@@ -58,24 +75,32 @@ public class BatchGradient {
         }
 
         public void aggregate(BatchGradientData  obj2) {
-            System.out.println("Before Cum loss obj1: " + cumLoss);
-            System.out.println("Before Cum loss obj2: " + obj2.cumLoss);
+//            System.out.println("Before Cum loss obj1: " + cumLoss);
+//            System.out.println("Before Cum loss obj2: " + obj2.cumLoss);
+//
+//            this.normalizeBatchGradient();
+//            obj2.normalizeBatchGradient();
+//
+//            System.out.println("After Cum loss obj1: " + cumLoss);
+//            System.out.println("After Cum loss obj2: " + obj2.cumLoss);
+//
+//            double sum = (double) (gatherGradIter + obj2.gatherGradIter);
+//            if (sum > 0.0) {
+//                for (int i = 0; i < size_hash; i++)
+//                    localGbatch[i] = (gatherGradIter * localGbatch[i] + obj2.gatherGradIter * obj2.localGbatch[i]) / sum;
+//                cumLoss = (gatherGradIter * cumLoss + obj2.gatherGradIter * obj2.cumLoss) / sum;
+//                gatherGradIter += obj2.gatherGradIter;
+//            }
+//
+//            System.out.println("After aggregation Cum loss obj1: " + cumLoss);
 
-            this.normalizeBatchGradient();
-            obj2.normalizeBatchGradient();
-
-            System.out.println("After Cum loss obj1: " + cumLoss);
-            System.out.println("After Cum loss obj2: " + obj2.cumLoss);
-
-            double sum = (double) (gatherGradIter + obj2.gatherGradIter);
-            if (sum > 0.0) {
-                for (int i = 0; i < size_hash; i++)
-                    localGbatch[i] = (gatherGradIter * localGbatch[i] + obj2.gatherGradIter * obj2.localGbatch[i]) / sum;
-                cumLoss = (gatherGradIter * cumLoss + obj2.gatherGradIter * obj2.cumLoss) / sum;
-                gatherGradIter += obj2.gatherGradIter;
+            gatherGradIter += obj2.gatherGradIter;
+            for (int i = 0; i < size_hash; i++) {
+                localGbatch[i] += obj2.localGbatch[i];
+                featureCounts[i] += obj2.featureCounts[i];
+                featureMax[i] = Math.max(featureMax[i], obj2.featureMax[i]);
             }
 
-            System.out.println("After aggregation Cum loss obj1: " + cumLoss);
 
         }
 
@@ -97,9 +122,12 @@ public class BatchGradient {
             return gatherGradIter;
         }
 
+        public long[] getFeatureCounts() { return featureCounts; }
+
+        public double[] getFeatureMax() { return featureMax; }
     }
 
-    protected static class CombOp implements Function2<BatchGradientData, BatchGradientData, BatchGradientData> {
+    public static class CombOp implements Function2<BatchGradientData, BatchGradientData, BatchGradientData> {
 
         @Override
         public BatchGradientData call(BatchGradientData v1, BatchGradientData v2) throws Exception {
@@ -109,7 +137,7 @@ public class BatchGradient {
         }
     }
 
-    protected static class SeqOp implements Function2<BatchGradientData, Instance, BatchGradientData> {
+    public static class SeqOp implements Function2<BatchGradientData, Instance, BatchGradientData> {
 
         @Override
         public BatchGradientData call(BatchGradientData v1, Instance v2) throws Exception {
