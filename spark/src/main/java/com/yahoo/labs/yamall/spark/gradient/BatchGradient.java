@@ -47,10 +47,10 @@ public class BatchGradient {
             gatherGradIter++;
 
             double pred = predict(sample);
+            pred = Math.min(Math.max(pred, minPrediction), maxPrediction);
 
             final double grad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
 
-            pred = Math.min(Math.max(pred, minPrediction), maxPrediction);
 
             if (Math.abs(grad) > 1e-8) {
                 sample.getVector().addScaledSparseVectorToDenseVector(localGbatch, grad);
@@ -100,7 +100,7 @@ public class BatchGradient {
                 featureCounts[i] += obj2.featureCounts[i];
                 featureMax[i] = Math.max(featureMax[i], obj2.featureMax[i]);
             }
-            cumLoss += obj2.cumLoss;
+                cumLoss += obj2.cumLoss;
 
 
         }
@@ -149,7 +149,7 @@ public class BatchGradient {
 
 
     public static BatchGradientData computeGradient(JavaRDD<Instance> data, int bit, double[] w ){
-        BatchGradientData batchgradient = data.treeAggregate(new BatchGradientData(bit, w), new SeqOp(), new CombOp(), 11);
+        BatchGradientData batchgradient = data.treeAggregate(new BatchGradientData(bit, w), new SeqOp(), new CombOp(), 5);
         batchgradient.normalizeBatchGradient();
         return batchgradient;
     }

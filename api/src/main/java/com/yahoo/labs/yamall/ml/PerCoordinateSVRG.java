@@ -51,7 +51,7 @@ public class PerCoordinateSVRG implements Learner {
     public double iter = 0;
     protected int size_hash = 0;
 
-    private double eta = 0.01;
+    protected double eta = 0.01;
     private int SGDSize = 1000;
 
     public PerCoordinateSVRG(int bits) {

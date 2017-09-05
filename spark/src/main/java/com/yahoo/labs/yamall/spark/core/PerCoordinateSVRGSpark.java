@@ -25,19 +25,22 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
     protected StringBuilder strb = new StringBuilder("");
     protected boolean miniBatchSGD = false;
     protected String outputDir = "";
+    protected int batchSize = 10000;
 
     public void init(SparkConf sparkConf) {
         outputDir = sparkConf.get("spark.myapp.outdir");
-
         sparkIter = Integer.parseInt(sparkConf.get("spark.myapp.iter"));
         logFile = outputDir + "/log.txt";
 
+        strb.append("---++++++++ Learner report\n");
         strb.append("--- SVRG_FR\n");
         strb.append("--- Output: " + outputDir + "\n");
         strb.append("--- Log file: " + logFile + "\n");
 
         strb.append("--- Iter: " + sparkIter + "\n");
+        strb.append("--- Batch size: " + batchSize + "\n");
         strb.append("--- Bits hash: " + bitsHash + "\n");
+        strb.append("--- SVRG_FR learning rate: " + this.eta + "\n");
 
         Loss lossFnc = new LogisticLoss();
         this.setLoss(lossFnc);
@@ -58,8 +61,14 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
 
     public PerCoordinateSVRGSpark(SparkConf sparkConf, StringBuilder strb, int bitsHash) {
         super(bitsHash);
+
         this.bitsHash = bitsHash;
+        batchSize = Integer.parseInt(sparkConf.get("spark.myapp.batchsize", "1000"));
+        this.setSGDSize(batchSize);
+
+        this.setLearningRate(Double.parseDouble(sparkConf.get("spark.myapp.lr", "0.5")));
         this.strb = strb;
+
         init(sparkConf);
     }
 
@@ -93,9 +102,6 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
     @Override
     public void train(JavaRDD<String> input) throws IOException {
         String line ="";
-        double fraction = 1.0 / ((double) sparkIter);
-        System.out.println("--- Fraction: " + fraction);
-        strb.append("--- Fraction: " + fraction + "\n");
         //input.cache();
         //input.persist();
 
@@ -104,8 +110,16 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
         long numSamples = 0;
 
 
+        // TODO: fraction should be set addaptively
+        //double fraction = 1.0 / ((double) sampleSize);
+        double fraction = (1000.0 * batchSize ) / ((double) sampleSize);
+        System.out.println("--- Fraction: " + fraction);
+        strb.append("--- Fraction: " + fraction + "\n");
+
+
         long clusterStartTime = System.currentTimeMillis();
 
+        //input.persist(StorageLevel.MEMORY_AND_DISK());
         JavaRDD<Instance> inputInstances = input.map(new StringToYamallInstance(bitsHash));
         //inputInstances.persist(StorageLevel.MEMORY_AND_DISK());
 
