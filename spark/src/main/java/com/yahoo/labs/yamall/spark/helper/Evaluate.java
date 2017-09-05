@@ -6,6 +6,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics;
 import scala.Tuple2;
 
@@ -37,8 +38,10 @@ public class Evaluate {
 //        strb.append("" + avg.avg() + " " + avg.getNum() );
 //    }
 
-
-    protected static void computeResult(StringBuilder strb, JavaPairRDD<Object, Object> predictionAndLabels){
+    public static void computeResult(StringBuilder strb, JavaSparkContext sparkContext, String inputDir, Learner learner, int bitsHash) {
+        JavaRDD<String> input = sparkContext.textFile(inputDir );
+        JavaPairRDD<String, Tuple2> posteriorsAndLables = input.mapToPair(new PosteriorComputer(learner, bitsHash));
+        JavaPairRDD<Object, Object> predictionAndLabels = posteriorsAndLables.values().mapToPair((PairFunction<Tuple2, Object, Object>) tup -> new Tuple2<>(tup._1(),tup._2()));
 
         // Get evaluation metrics.
         BinaryClassificationMetrics metrics =
@@ -71,12 +74,13 @@ public class Evaluate {
 //        JavaRDD<Double> thresholds = precision.map(t -> Double.parseDouble(t._1().toString()));
 
         // ROC Curve
-        JavaRDD<?> roc = metrics.roc().toJavaRDD();
-        strb.append("ROC curve: " + roc.collect() + "\n" );
-        // AUPRC
+        // JavaRDD<?> roc = metrics.roc().toJavaRDD();
+        // strb.append("+++ ROC curve: " + roc.collect() + "\n" );
 
-        strb.append("Area under precision-recall curve = " + metrics.areaUnderPR() + "\n" );
-        strb.append("Area under ROC = " + metrics.areaUnderROC() + "\n");
+        // AUPRC
+        strb.append("+++ Area under precision-recall curve = " + metrics.areaUnderPR() + "\n" );
+        // AUC
+        strb.append("+++ Area under ROC = " + metrics.areaUnderROC() + "\n");
     }
 
 
@@ -93,14 +97,17 @@ public class Evaluate {
         String output = sparkConf.get("spark.myapp.output");
         int bitsHash = Integer.parseInt(sparkConf.get("spark.myapp.bitshash", "23"));
 
-        double loss = getLoss(sparkContext, inputDir, learner, bitsHash);
 
         StringBuilder strb = new StringBuilder("");
 
         strb.append( "Model: " + modelDir + "/" + modelFname + "\n" );
         strb.append( "Input: " + inputDir + "\n" );
         strb.append( "Output: " + output + "\n" );
+
+        double loss = getLoss(sparkContext, inputDir, learner, bitsHash);
         strb.append( "Loss: " + loss + "\n");
+
+        computeResult(strb, sparkContext, inputDir, learner, bitsHash);
 
         System.out.println( strb.toString());
         FileWriterToHDFS.writeToHDFS( output, strb.toString());

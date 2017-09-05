@@ -2,12 +2,14 @@ package com.yahoo.labs.yamall.spark.core;
 
 import com.yahoo.labs.yamall.core.Instance;
 import com.yahoo.labs.yamall.core.SparseVector;
+import com.yahoo.labs.yamall.ml.LogisticLoss;
+import com.yahoo.labs.yamall.ml.Loss;
 import com.yahoo.labs.yamall.ml.PerCoordinateSVRG;
 import com.yahoo.labs.yamall.spark.gradient.BatchGradient;
 import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
 import com.yahoo.labs.yamall.spark.helper.StringToYamallInstance;
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.storage.StorageLevel;
 
 import java.io.IOException;
 import java.util.List;
@@ -22,6 +24,29 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
     protected String logFile = "log.txt";
     protected StringBuilder strb = new StringBuilder("");
     protected boolean miniBatchSGD = false;
+    protected String outputDir = "";
+
+    public void init(SparkConf sparkConf) {
+        outputDir = sparkConf.get("spark.myapp.outdir");
+
+        sparkIter = Integer.parseInt(sparkConf.get("spark.myapp.iter"));
+        logFile = outputDir + "/log.txt";
+
+        strb.append("--- SVRG_FR\n");
+        strb.append("--- Output: " + outputDir + "\n");
+        strb.append("--- Log file: " + logFile + "\n");
+
+        strb.append("--- Iter: " + sparkIter + "\n");
+        strb.append("--- Bits hash: " + bitsHash + "\n");
+
+        Loss lossFnc = new LogisticLoss();
+        this.setLoss(lossFnc);
+
+
+        System.out.println(strb.toString());
+    }
+
+
 
     void saveLog() throws IOException {
         FileWriterToHDFS.writeToHDFS(logFile, strb.toString());
@@ -31,9 +56,11 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
         this.miniBatchSGD = true;
     }
 
-    public PerCoordinateSVRGSpark( int bitsHash) {
+    public PerCoordinateSVRGSpark(SparkConf sparkConf, StringBuilder strb, int bitsHash) {
         super(bitsHash);
         this.bitsHash = bitsHash;
+        this.strb = strb;
+        init(sparkConf);
     }
 
     private void endBatchPhase(BatchGradient.BatchGradientData batchgradient) {
@@ -72,20 +99,31 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
         //input.cache();
         //input.persist();
 
-        int numSamples = 0;
+        long sampleSize = input.count();
+        strb.append("--- Input instances: " + sampleSize + "\n");
+        long numSamples = 0;
 
 
         long clusterStartTime = System.currentTimeMillis();
 
         JavaRDD<Instance> inputInstances = input.map(new StringToYamallInstance(bitsHash));
-        inputInstances.persist(StorageLevel.MEMORY_AND_DISK());
+        //inputInstances.persist(StorageLevel.MEMORY_AND_DISK());
+
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // burn in
-        List<Instance> inMemorySamples = inputInstances.takeSample(true, getBurnInLength());
+        strb.append("--- Burn-in starts (" +getBurnInLength() + ")\n");
+        saveLog();
+        // slow
+        //List<Instance> inMemorySamples = inputInstances.takeSample(true, getBurnInLength());
+        double burnInFraction = (1.2 * getBurnInLength() ) / (double) sampleSize;
+        numSamples += getBurnInLength();
+        List<Instance> inMemorySamples = inputInstances.sample(true, burnInFraction).collect();
         for(Instance sample : inMemorySamples) {
             this.updateBurnIn(sample);
         }
+        strb.append("--- Burn-in is ready\n" );
+        saveLog();
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -93,6 +131,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
             line = "--------------------------------------------------------------------\n---> Iter: " + i + "\n";
             strb.append(line);
             System.out.println(line);
+            saveLog();
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // compute gradient
             JavaRDD<Instance> subsamp = inputInstances.sample(false, fraction);
@@ -119,11 +158,16 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
                 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
                 // grad step
                 int batchSize = getSGDPhaseLength();
-                inMemorySamples = inputInstances.takeSample(true, batchSize);
+                strb.append("--- Gradient phase starts (" + batchSize + ")\n");
+                //inMemorySamples = inputInstances.takeSample(true, batchSize);
+                double sgdFraction = (1.2 * batchSize ) / (double) sampleSize;
+                numSamples += batchSize;
+
+                inMemorySamples = inputInstances.sample(true, sgdFraction).collect();
                 for (Instance sample : inMemorySamples) {
                     trainLoss += this.updateSGDStep(sample);
                 }
-                trainLoss /= (double) batchSize;
+                trainLoss /= (double) inMemorySamples.size();
             }
 
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -136,7 +180,6 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
             line = String.format("%d %f %f %f\n", numSamples, trainLoss, batchgradient.cumLoss, elapsedTimeInhours);
             strb.append(line);
             System.out.print(line);
-
 
             saveLog();
 

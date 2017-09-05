@@ -4,6 +4,7 @@ import com.yahoo.labs.yamall.parser.VWParser;
 import com.yahoo.labs.yamall.spark.core.PerCoordinateSVRGSpark;
 import com.yahoo.labs.yamall.spark.core.SparkLearner;
 import com.yahoo.labs.yamall.spark.gradient.BatchGradient;
+import com.yahoo.labs.yamall.spark.helper.Evaluate;
 import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
 import com.yahoo.labs.yamall.spark.helper.ModelSerializationToHDFS;
 import com.yahoo.labs.yamall.spark.helper.PosteriorComputer;
@@ -107,8 +108,12 @@ public class Train {
 
 
         //long lineNum = input.count();
-        learner = new PerCoordinateSVRGSpark(bitsHash);
+        learner = new PerCoordinateSVRGSpark(sparkConf,strb,bitsHash);
         learner.train(input);
+
+        if (! inputDirTest.isEmpty()){
+            Evaluate.computeResult(strb,sparkContext,inputDirTest,learner,bitsHash);
+        }
 
         if (saveModelFlag) {
             String modelFile = "/model.bin";

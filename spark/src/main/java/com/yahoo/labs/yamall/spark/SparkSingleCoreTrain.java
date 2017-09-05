@@ -79,7 +79,7 @@ public class SparkSingleCoreTrain {
         while (fileStatusListIterator.hasNext()) {
             LocatedFileStatus fileStatus = fileStatusListIterator.next();
             String fileName = fileStatus.getPath().getName();
-            if (fileName.contains(".gz") || fileName.contains(".txt"))
+            if (fileName.contains(".gz") || fileName.startsWith("part"))
                 featureFilePaths.add(fileStatus.getPath());
         }
 
@@ -94,7 +94,7 @@ public class SparkSingleCoreTrain {
         while (fileStatusListIterator.hasNext()) {
             LocatedFileStatus fileStatus = fileStatusListIterator.next();
             String fileName = fileStatus.getPath().getName();
-            if (fileName.contains(".gz") || fileName.contains(".txt"))
+            if (fileName.contains(".gz") || fileName.startsWith("part"))
                 featureFilePathsTest.add(fileStatus.getPath());
         }
 
@@ -174,6 +174,7 @@ public class SparkSingleCoreTrain {
         double trainLoss = cumLoss / (double) numSamples;
         //double testLoss = eval(hdfs, vwparser);
         double testLoss = Evaluate.getLoss(sparkContext,inputDirTest,learner, bitsHash);
+
         long clusteringRuntime = System.currentTimeMillis() - clusterStartTime;
         double elapsedTime = clusteringRuntime / 1000.0;
         double elapsedTimeInhours = elapsedTime / 3600.0;
@@ -181,7 +182,7 @@ public class SparkSingleCoreTrain {
         String line = String.format("%d %f %f %f\n", numSamples, trainLoss, testLoss, elapsedTimeInhours);
         strb.append(line);
         System.out.print(method + " " + line);
-
+        Evaluate.computeResult(strb,sparkContext,inputDirTest,learner, bitsHash);
         saveLog();
 
 

@@ -100,6 +100,7 @@ public class BatchGradient {
                 featureCounts[i] += obj2.featureCounts[i];
                 featureMax[i] = Math.max(featureMax[i], obj2.featureMax[i]);
             }
+            cumLoss += obj2.cumLoss;
 
 
         }
