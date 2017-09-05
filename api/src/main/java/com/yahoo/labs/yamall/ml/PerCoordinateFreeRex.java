@@ -17,12 +17,12 @@ import java.io.ObjectOutputStream;
 
 @SuppressWarnings("serial")
 public class PerCoordinateFreeRex implements SVRGLearner {
-    private transient double[] maxGrads;
-    private transient double[] inverseEtaSq;
-    private transient double[] sumGrads;
-    private transient double[] scaling;
-    private transient double[] center;
-    private transient double[] w;
+    private double[] maxGrads;
+    private double[] inverseEtaSq;
+    private double[] sumGrads;
+    private double[] scaling;
+    private double[] center;
+    private double[] w;
 
     private boolean useScaling = false;
     private boolean useWeightScaling = true;

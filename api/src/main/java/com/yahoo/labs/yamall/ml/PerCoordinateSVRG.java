@@ -23,11 +23,11 @@ public class PerCoordinateSVRG implements Learner {
     private static final int SGD_PHASE = 2;
 
     private int state = 0;
-    protected transient double[] negativeBatchGradient;
-    protected transient double[] w_previous;
-    private transient double[] batchGradSquared;
+    protected double[] negativeBatchGradient;
+    protected double[] w_previous;
+    private double[] batchGradSquared;
 
-    protected transient double[] featureScalings;
+    protected double[] featureScalings;
 
     double regularizationScaling = 0.0;
 

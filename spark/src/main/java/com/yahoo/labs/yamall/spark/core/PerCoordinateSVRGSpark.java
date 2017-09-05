@@ -93,7 +93,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
     @Override
     public void train(JavaRDD<String> input) throws IOException {
         String line ="";
-        double fraction = 1.0 / (sparkIter + 1.0);
+        double fraction = 1.0 / ((double) sparkIter);
         System.out.println("--- Fraction: " + fraction);
         strb.append("--- Fraction: " + fraction + "\n");
         //input.cache();
@@ -116,13 +116,15 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
         saveLog();
         // slow
         //List<Instance> inMemorySamples = inputInstances.takeSample(true, getBurnInLength());
-        double burnInFraction = (1.2 * getBurnInLength() ) / (double) sampleSize;
+        double burnInFraction = (1.0 * getBurnInLength() ) / (double) sampleSize;
         numSamples += getBurnInLength();
+        double burninCumLoss = 0.0;
         List<Instance> inMemorySamples = inputInstances.sample(true, burnInFraction).collect();
         for(Instance sample : inMemorySamples) {
-            this.updateBurnIn(sample);
+            double score = this.updateBurnIn(sample);
+            burninCumLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
         }
-        strb.append("--- Burn-in is ready\n" );
+        strb.append("--- Burn-in is ready, sample size: " + inMemorySamples.size() + "\n--- cummulative loss: " + (burninCumLoss / (double) inMemorySamples.size())  + "\n" );
         saveLog();
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -160,14 +162,16 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
                 int batchSize = getSGDPhaseLength();
                 strb.append("--- Gradient phase starts (" + batchSize + ")\n");
                 //inMemorySamples = inputInstances.takeSample(true, batchSize);
-                double sgdFraction = (1.2 * batchSize ) / (double) sampleSize;
+                double sgdFraction = (1.0 * batchSize ) / (double) sampleSize;
                 numSamples += batchSize;
 
                 inMemorySamples = inputInstances.sample(true, sgdFraction).collect();
                 for (Instance sample : inMemorySamples) {
-                    trainLoss += this.updateSGDStep(sample);
+                    double score = this.updateSGDStep(sample);
+                    trainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
                 }
                 trainLoss /= (double) inMemorySamples.size();
+                strb.append("--- Gradient phase is ready, sample size: " + inMemorySamples.size() + "\n--- cummulative loss: " + trainLoss  + "\n" );
             }
 
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////
