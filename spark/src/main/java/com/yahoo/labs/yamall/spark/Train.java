@@ -117,7 +117,7 @@ public class Train {
 
         if (saveModelFlag) {
             String modelFile = "/model.bin";
-            ModelSerializationToHDFS.saveModel(outputDir, modelFile, learner);
+            ModelSerializationToHDFS.saveModel(outputDir, learner);
         }
 
     }

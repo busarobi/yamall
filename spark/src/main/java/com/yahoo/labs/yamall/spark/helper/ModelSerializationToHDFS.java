@@ -13,18 +13,20 @@ import java.io.IOException;
  * Created by busafekete on 8/29/17.
  */
 public class ModelSerializationToHDFS {
-    public static void saveModel(String dir, String fname, Learner learner) throws IOException {
-        FileDeleter.delete(new File(dir + fname));
-        IOLearner.saveLearner(learner, fname);
+    private static final String MODEL_BIN = "model.bin";
+
+    public static void saveModel(String dir, Learner learner) throws IOException {
+        FileDeleter.delete(new File(MODEL_BIN));
+        IOLearner.saveLearner(learner, MODEL_BIN);
 
         // copy output to HDFS
         FileSystem fileSystem = FileSystem.get(new Configuration());
-        fileSystem.moveFromLocalFile(new Path(fname), new Path(dir));
+        FileDeleter.delete(new File(dir + "/" + MODEL_BIN));
+        fileSystem.moveFromLocalFile(new Path(MODEL_BIN), new Path(dir));
 
     }
 
 
-    private static final String MODEL_BIN = "model.bin";
     public static Learner loadModel(String dir, String fname) throws IOException {
         // move model to the node
         FileSystem fileSystem = FileSystem.get(new Configuration());

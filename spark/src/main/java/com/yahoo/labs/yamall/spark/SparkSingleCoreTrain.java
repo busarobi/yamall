@@ -7,6 +7,7 @@ import com.yahoo.labs.yamall.spark.helper.Evaluate;
 import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
 import com.yahoo.labs.yamall.spark.helper.ModelSerializationToHDFS;
 import com.yahoo.labs.yamall.spark.helper.SparkLearnerFactory;
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -131,6 +132,8 @@ public class SparkSingleCoreTrain {
             BufferedReader br = null;
             if (featureFile.getName().contains(".gz"))
                 br = new BufferedReader(new InputStreamReader(new GZIPInputStream(hdfs.open(featureFile))));
+            else if (featureFile.getName().contains(".bz2"))
+                br = new BufferedReader(new InputStreamReader(new BZip2CompressorInputStream(hdfs.open(featureFile))));
             else
                 br = new BufferedReader(new InputStreamReader(hdfs.open(featureFile)));
 
@@ -187,8 +190,7 @@ public class SparkSingleCoreTrain {
 
 
         if (saveModelFlag) {
-            String modelFile = "/model.bin";
-            ModelSerializationToHDFS.saveModel(outputDir, modelFile, learner);
+            ModelSerializationToHDFS.saveModel(outputDir, learner);
         }
 
     }
@@ -207,6 +209,8 @@ public class SparkSingleCoreTrain {
 //            BufferedReader br = null;
 //            if (featureFile.getName().contains(".gz"))
 //                br = new BufferedReader(new InputStreamReader(new GZIPInputStream(hdfs.open(featureFile))));
+//            else if (featureFile.getName().contains(".bz2"))
+//                br = new BufferedReader(new InputStreamReader(new BZip2CompressorInputStream(hdfs.open(featureFile))));
 //            else
 //                br = new BufferedReader(new InputStreamReader(hdfs.open(featureFile)));
 //
