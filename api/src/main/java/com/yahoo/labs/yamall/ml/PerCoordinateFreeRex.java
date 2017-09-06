@@ -20,11 +20,14 @@ public class PerCoordinateFreeRex implements SVRGLearner {
     private double[] maxGrads;
     private double[] inverseEtaSq;
     private double[] sumGrads;
-    private double[] scaling;
+    private double[] weightScaling;
+    private double[] regretScaling;
     private double[] center;
     private double[] w;
 
-    private boolean useScaling = false;
+    private double guessedMaxGrad = 1.0;
+
+    private boolean useRegretScaling = false;
     private boolean useWeightScaling = true;
 
     private double k_inv = 0.45; // sqrt(1/5)
@@ -38,14 +41,17 @@ public class PerCoordinateFreeRex implements SVRGLearner {
         inverseEtaSq = new double[size_hash];
         sumGrads = new double[size_hash];
 
-        // probably in practice we don't ever need the following two arrays
-        scaling = new double[size_hash];
+        regretScaling = new double[size_hash];
+        weightScaling = new double[size_hash];
         maxGrads = new double[size_hash];
 
         w = new double[size_hash];
         center = new double[size_hash]; //default 0, but allows for FTRL with arbitrary centering.
 
+    }
 
+    public void setGuessedMaxGrad(double guess) {
+        guessedMaxGrad = guess;
     }
 
     public double[] getDenseWeights() {
@@ -59,7 +65,6 @@ public class PerCoordinateFreeRex implements SVRGLearner {
 
     public void reset() {
         for (int i=0; i<size_hash; i++) {
-            this.inverseEtaSq[i] = 0.0;
             this.sumGrads[i] = 0.0;
             this.w[i] = center[i];
         }
@@ -90,8 +95,8 @@ public class PerCoordinateFreeRex implements SVRGLearner {
         for (Int2DoubleMap.Entry entry : featureVector.int2DoubleEntrySet()) {
             int key = entry.getIntKey();
             double value = Math.abs(entry.getDoubleValue());
-            if (value > scaling[key] )
-                scaling[key] = value;
+            if (value > weightScaling[key] )
+                weightScaling[key] = value;
         }
     }
 
@@ -116,19 +121,11 @@ public class PerCoordinateFreeRex implements SVRGLearner {
         this.k_inv = k_inv;
     }
 
-    public void useScaling(boolean flag) {
-        if (this.useWeightScaling && flag) {
-            System.out.println("Scaling and weight scaling cannot be used together! ");
-            System.exit(-1);
-        }
-        this.useScaling = flag;
+    public void useRegretScaling(boolean flag) {
+        this.useRegretScaling = flag;
     }
 
     public void useWeightScaling(boolean flag ){
-        if (this.useScaling && flag) {
-            System.out.println("Scaling and weight scaling cannot be used together! ");
-            System.exit(-1);
-        }
         this.useWeightScaling = flag;
     }
 
@@ -140,6 +137,30 @@ public class PerCoordinateFreeRex implements SVRGLearner {
             batchUpdateCoordinate(key, negativeGrad_i, 1);
         }
 
+    }
+
+    double getOffset(int key) {
+        double initEta = guessedMaxGrad;
+        if (useWeightScaling) {
+            initEta *= weightScaling[key];
+        }
+        double inverseEta_i = Math.sqrt(inverseEtaSq[key] + initEta);
+        double sumGrads_i = sumGrads[key];
+
+        if (Math.abs(inverseEta_i) < 1e-7) {
+            return 0.0;
+        }
+
+        double offset = (Math.signum(sumGrads_i)) * (Math.exp(k_inv * Math.abs(sumGrads_i) / inverseEta_i) - 1.0);
+        if (useWeightScaling) {
+            offset /= weightScaling[key];
+        }
+
+        if (useRegretScaling) {
+            offset /= regretScaling[key];
+        }
+
+        return offset;
     }
 
     public void batchUpdateCoordinate(int key, double negativeGrad, int missed_steps) {
@@ -159,21 +180,14 @@ public class PerCoordinateFreeRex implements SVRGLearner {
             inverseEtaSq[key] = inverseEtaSq_i;
 
             if (inverseEtaSq_i>1e-7) {
-                double offset = (Math.signum(sumGrads_i)) * (Math.exp(k_inv * Math.abs(sumGrads_i) / (Math.sqrt(inverseEtaSq_i))) - 1.0);
 
-                if (useScaling) {
-                    double scaling_i = scaling[key];
+                if (useRegretScaling) {
+                    double scaling_i = regretScaling[key];
                     scaling_i = Math.max(scaling_i, inverseEtaSq_i / (maxGrads_i * maxGrads_i));
-                    scaling[key] = scaling_i;
-                    if (scaling_i > 0.0)
-                        offset /= scaling[key];
+                    regretScaling[key] = scaling_i;
                 }
 
-                if (useWeightScaling) {
-                    double scaling_i = scaling[key];
-                    if (scaling_i > 0.0)
-                        offset /= scaling_i;
-                }
+                double offset = getOffset(key);
 
 
                 double update = offset + center[key];
@@ -196,7 +210,7 @@ public class PerCoordinateFreeRex implements SVRGLearner {
     private void writeObject(ObjectOutputStream o) throws IOException {
         o.defaultWriteObject();
         o.writeObject(SparseVector.dense2Sparse(maxGrads));
-        o.writeObject(SparseVector.dense2Sparse(scaling));
+//        o.writeObject(SparseVector.dense2Sparse(scaling));
         o.writeObject(SparseVector.dense2Sparse(sumGrads));
         o.writeObject(SparseVector.dense2Sparse(inverseEtaSq));
         o.writeObject(SparseVector.dense2Sparse(center));
@@ -206,7 +220,7 @@ public class PerCoordinateFreeRex implements SVRGLearner {
     private void readObject(ObjectInputStream o) throws IOException, ClassNotFoundException {
         o.defaultReadObject();
         maxGrads = ((SparseVector) o.readObject()).toDenseVector(size_hash);
-        scaling = ((SparseVector) o.readObject()).toDenseVector(size_hash);
+//        scaling = ((SparseVector) o.readObject()).toDenseVector(size_hash);
         sumGrads = ((SparseVector) o.readObject()).toDenseVector(size_hash);
         inverseEtaSq = ((SparseVector) o.readObject()).toDenseVector(size_hash);
         center = ((SparseVector) o.readObject()).toDenseVector(size_hash);
