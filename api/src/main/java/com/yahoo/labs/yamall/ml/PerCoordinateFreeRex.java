@@ -210,7 +210,8 @@ public class PerCoordinateFreeRex implements SVRGLearner {
     private void writeObject(ObjectOutputStream o) throws IOException {
         o.defaultWriteObject();
         o.writeObject(SparseVector.dense2Sparse(maxGrads));
-//        o.writeObject(SparseVector.dense2Sparse(scaling));
+        o.writeObject(SparseVector.dense2Sparse(regretScaling));
+        o.writeObject(SparseVector.dense2Sparse(weightScaling));
         o.writeObject(SparseVector.dense2Sparse(sumGrads));
         o.writeObject(SparseVector.dense2Sparse(inverseEtaSq));
         o.writeObject(SparseVector.dense2Sparse(center));
@@ -220,7 +221,8 @@ public class PerCoordinateFreeRex implements SVRGLearner {
     private void readObject(ObjectInputStream o) throws IOException, ClassNotFoundException {
         o.defaultReadObject();
         maxGrads = ((SparseVector) o.readObject()).toDenseVector(size_hash);
-//        scaling = ((SparseVector) o.readObject()).toDenseVector(size_hash);
+        regretScaling = ((SparseVector) o.readObject()).toDenseVector(size_hash);
+        weightScaling = ((SparseVector) o.readObject()).toDenseVector(size_hash);
         sumGrads = ((SparseVector) o.readObject()).toDenseVector(size_hash);
         inverseEtaSq = ((SparseVector) o.readObject()).toDenseVector(size_hash);
         center = ((SparseVector) o.readObject()).toDenseVector(size_hash);
