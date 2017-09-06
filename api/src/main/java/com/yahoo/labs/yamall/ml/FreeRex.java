@@ -21,11 +21,11 @@ public class FreeRex implements DenseSVRGLearner {
     private transient double inverseEtaSq = 0;
     private transient double[] negativeGradSum;
     private transient double[] weightScaling;
-    private double scaling = 1.0;
+    private double regretScaling = 1.0;
     private transient double[] center;
     private transient double[] w;
 
-    private boolean useScaling = false;
+    private boolean useRegretScaling = false;
     private boolean useWeightScaling = true;
 
     private double k_inv = 0.45; // sqrt(1/5)
@@ -169,7 +169,7 @@ public class FreeRex implements DenseSVRGLearner {
     }
 
     /*
-    This scaling is similar to the one applied in normalized gradient descent, see SGD_VW
+    This regretScaling is similar to the one applied in normalized gradient descent, see SGD_VW
      */
     public void updateScalingVector(Instance sample) {
         if (useWeightScaling) {
@@ -199,17 +199,17 @@ public class FreeRex implements DenseSVRGLearner {
         this.k_inv = k_inv;
     }
 
-    public void useScaling(boolean flag) {
+    public void useRegretScaling(boolean flag) {
         if (this.useWeightScaling && flag) {
-            System.out.println("Scaling and weight scaling cannot be used together! ");
+            System.out.println("Scaling and weight regretScaling cannot be used together! ");
             System.exit(-1);
         }
-        this.useScaling = flag;
+        this.useRegretScaling = flag;
     }
 
     public void useWeightScaling(boolean flag) {
-        if (this.useScaling && flag) {
-            System.out.println("Scaling and weight scaling cannot be used together! ");
+        if (this.useRegretScaling && flag) {
+            System.out.println("Scaling and weight regretScaling cannot be used together! ");
             System.exit(-1);
         }
         this.useWeightScaling = flag;
@@ -230,8 +230,8 @@ public class FreeRex implements DenseSVRGLearner {
         maxGradNorm = Math.max(Math.sqrt(gradNormSquared), maxGradNorm);
 
         inverseEtaSq = Math.max(inverseEtaSq + 2 * gradNormSquared, maxGradNorm * gradSumNorm);
-        if (useScaling) {
-            scaling = Math.max(scaling, inverseEtaSq / (maxGradNorm * maxGradNorm));
+        if (useRegretScaling) {
+            regretScaling = Math.max(regretScaling, inverseEtaSq / (maxGradNorm * maxGradNorm));
         }
 
         for (Int2DoubleMap.Entry entry : negativeGrad.int2DoubleEntrySet()) {
@@ -253,8 +253,8 @@ public class FreeRex implements DenseSVRGLearner {
             if (useWeightScaling && weightScaling[key]>0)
                 offset /= weightScaling[key];
 
-            if (useScaling)
-                offset /= scaling;
+            if (useRegretScaling)
+                offset /= regretScaling;
         }
         return offset;
     }

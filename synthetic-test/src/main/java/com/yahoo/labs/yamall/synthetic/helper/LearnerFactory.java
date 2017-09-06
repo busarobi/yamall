@@ -33,7 +33,7 @@ public class LearnerFactory {
             System.out.println( "---FREE REX learning rate: " + learningRate);
 
             PerCoordinateFreeRex l = new PerCoordinateFreeRex(bitsHash);
-            l.useScaling(scaling);
+            l.useRegretScaling(scaling);
             l.useWeightScaling(wscaling);
             l.setLearningRate(learningRate);
 
@@ -45,7 +45,7 @@ public class LearnerFactory {
             System.out.println( "---DENSE FREE REX learning rate: " + learningRate);
 
             FreeRex l = new FreeRex(bitsHash);
-            l.useScaling(scaling);
+            l.useRegretScaling(scaling);
             l.useWeightScaling(wscaling);
             l.setLearningRate(learningRate);
 
