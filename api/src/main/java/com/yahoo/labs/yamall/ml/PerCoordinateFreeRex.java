@@ -144,7 +144,7 @@ public class PerCoordinateFreeRex implements SVRGLearner {
         if (useWeightScaling) {
             initEta *= weightScaling[key];
         }
-        double inverseEta_i = Math.sqrt(inverseEtaSq[key] + initEta);
+        double inverseEta_i = Math.sqrt(inverseEtaSq[key] + initEta * initEta);
         double sumGrads_i = sumGrads[key];
 
         if (Math.abs(inverseEta_i) < 1e-7) {
@@ -157,7 +157,7 @@ public class PerCoordinateFreeRex implements SVRGLearner {
         }
 
         if (useRegretScaling) {
-            offset /= regretScaling[key];
+            offset /= Math.sqrt(regretScaling[key]);
         }
 
         return offset;
@@ -182,8 +182,12 @@ public class PerCoordinateFreeRex implements SVRGLearner {
             if (inverseEtaSq_i>1e-7) {
 
                 if (useRegretScaling) {
+                    double initEta = guessedMaxGrad;
+                    if (useWeightScaling) {
+                        initEta *= weightScaling[key];
+                    }
                     double scaling_i = regretScaling[key];
-                    scaling_i = Math.max(scaling_i, inverseEtaSq_i / (maxGrads_i * maxGrads_i));
+                    scaling_i = Math.max(scaling_i, (inverseEtaSq_i + initEta * initEta) / Math.max(initEta * initEta, maxGrads_i * maxGrads_i) ) ;
                     regretScaling[key] = scaling_i;
                 }
 
