@@ -81,7 +81,7 @@ public class PerCoordinateSVRG implements Learner {
         return SGDSize;
     }
 
-    private int getBatchLength() {
+    public int getBatchLength() {
         return Math.max(SGDSize, totalSGDIter);
     }
 
@@ -198,12 +198,11 @@ public class PerCoordinateSVRG implements Learner {
             baseLearner.setCenter(w_previous);
             baseLearner.reset();
         }
-
         // perform one full batch grad step. Also update feature scalings.
         baseLearner.updateFromNegativeGrad(SparseVector.dense2Sparse(featureScalings),  SparseVector.dense2Sparse(negativeBatchGradient));
     }
 
-    private void endSGDPhase() {
+    protected void endSGDPhase() {
 
         double temp[] = baseLearner.getDenseWeights();
         for (int i=0; i<size_hash; i++) {
@@ -235,7 +234,7 @@ public class PerCoordinateSVRG implements Learner {
         return pred;
     }
 
-    private void endBurnInPhase() {
+    protected void endBurnInPhase() {
 
         double temp[] = baseLearner.getDenseWeights();
         for (int i=0; i<size_hash; i++) {
@@ -268,7 +267,7 @@ public class PerCoordinateSVRG implements Learner {
         }
     }
 
-    private void updateFeatureCounts(Instance sample) {
+    protected void updateFeatureCounts(Instance sample) {
         totalSamplesSeen ++;
         for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
             int key = entry.getIntKey();
