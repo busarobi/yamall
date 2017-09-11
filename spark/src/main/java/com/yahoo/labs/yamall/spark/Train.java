@@ -8,6 +8,7 @@ import com.yahoo.labs.yamall.spark.helper.Evaluate;
 import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
 import com.yahoo.labs.yamall.spark.helper.ModelSerializationToHDFS;
 import com.yahoo.labs.yamall.spark.helper.PosteriorComputer;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -42,6 +43,8 @@ public class Train {
     protected static int iter = 10;
 
     public static void init(SparkConf sparkConf) throws IOException {
+        FSDataInputStream fs ;
+
         outputDir = sparkConf.get("spark.myapp.outdir");
         inputDir = sparkConf.get("spark.myapp.input");
         inputDirTest = sparkConf.get("spark.myapp.test");
@@ -101,9 +104,10 @@ public class Train {
         init(sparkConf);
 
         JavaRDD<String> input = null;
-        if (inputPartition>0)
-            input = sparkContext.textFile(inputDir, inputPartition);
-        else
+        if (inputPartition>0) {
+            input = sparkContext.textFile(inputDir);
+            input = input.repartition(inputPartition);
+        } else
             input = sparkContext.textFile(inputDir);
 
 

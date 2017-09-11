@@ -149,7 +149,8 @@ public class BatchGradient {
 
 
     public static BatchGradientData computeGradient(JavaRDD<Instance> data, int bit, double[] w ){
-        BatchGradientData batchgradient = data.treeAggregate(new BatchGradientData(bit, w), new SeqOp(), new CombOp(), 5);
+        //BatchGradientData batchgradient = data.treeAggregate(new BatchGradientData(bit, w), new SeqOp(), new CombOp(), 5);
+        BatchGradientData batchgradient = data.aggregate(new BatchGradientData(bit, w), new SeqOp(), new CombOp());
         batchgradient.normalizeBatchGradient();
         return batchgradient;
     }
