@@ -82,7 +82,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
 
         for (int i=0; i<size_hash; i++) {
             lastUpdated[i] = gatherGradientIter;
-            negativeBatchGradient[i] = refBatchGrad[i];
+            negativeBatchGradient[i] = refBatchGrad[i]/gatherGradientIter;
 
             featureScalings[i] = Math.max(featureScalings[i],refFeatureMax[i]);
             featureCounts[i] += refFeatureCounts[i];
@@ -112,7 +112,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
 
         // TODO: fraction should be set addaptively
         //double fraction = 1.0 / ((double) sampleSize);
-        double fraction = (1000.0 * batchSize ) / ((double) sampleSize);
+        double fraction = Math.min((getBatchLength()) / ((double) sampleSize),1.0);
         System.out.println("--- Fraction: " + fraction);
         strb.append("--- Fraction: " + fraction + "\n");
 
@@ -133,11 +133,13 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
         double burnInFraction = (1.0 * getBurnInLength() ) / (double) sampleSize;
         numSamples += getBurnInLength();
         double burninCumLoss = 0.0;
-        List<Instance> inMemorySamples = inputInstances.sample(true, burnInFraction).collect();
+        List<Instance> inMemorySamples = inputInstances.sample(false, burnInFraction).collect();
         for(Instance sample : inMemorySamples) {
+            updateFeatureCounts(sample);
             double score = this.updateBurnIn(sample);
             burninCumLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
         }
+        endBurnInPhase();
         strb.append("--- Burn-in is ready, sample size: " + inMemorySamples.size() + "\n--- cummulative loss: " + (burninCumLoss / (double) inMemorySamples.size())  + "\n" );
         saveLog();
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,6 +152,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
             saveLog();
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // compute gradient
+            fraction = Math.min((getBatchLength()) / ((double) sampleSize),1.0);
             JavaRDD<Instance> subsamp = inputInstances.sample(false, fraction);
 
             double[] prev_w = this.baseLearner.getDenseWeights();
@@ -164,7 +167,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
                 System.exit(0);
             }
             numSamples += batchgradient.getNum();
-            line = "--- Gbatch step: " + batchgradient.gatherGradIter + " Cum loss: " + batchgradient.cumLoss + "\n";
+            line = "--- Gbatch step: " + batchgradient.gatherGradIter + " Cum loss: " + batchgradient.cumLoss/batchgradient.gatherGradIter + "\n";
             System.out.println(line);
             strb.append(line);
             saveLog();
@@ -179,12 +182,14 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
                 double sgdFraction = (1.0 * batchSize ) / (double) sampleSize;
                 numSamples += batchSize;
 
-                inMemorySamples = inputInstances.sample(true, sgdFraction).collect();
+                inMemorySamples = inputInstances.sample(false, sgdFraction).collect();
                 for (Instance sample : inMemorySamples) {
+                    updateFeatureCounts(sample);
                     double score = this.updateSGDStep(sample);
                     trainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
                 }
                 trainLoss /= (double) inMemorySamples.size();
+                endSGDPhase();
                 strb.append("--- Gradient phase is ready, sample size: " + inMemorySamples.size() + "\n--- cummulative loss: " + trainLoss  + "\n" );
             }
 
@@ -195,7 +200,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
             double elapsedTime = clusteringRuntime / 1000.0;
             double elapsedTimeInhours = elapsedTime / 3600.0;
 
-            line = String.format("%d %f %f %f\n", numSamples, trainLoss, batchgradient.cumLoss, elapsedTimeInhours);
+            line = String.format("%d %f %f %f\n", numSamples, trainLoss, batchgradient.cumLoss/batchgradient.gatherGradIter, elapsedTimeInhours);
             strb.append(line);
             System.out.print(line);
 
