@@ -152,7 +152,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
             saveLog();
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // compute gradient
-            fraction = Math.min((getBatchLength()) / ((double) sampleSize),1.0);
+            fraction = Math.min((10*getBatchLength()) / ((double) sampleSize),1.0);
             JavaRDD<Instance> subsamp = inputInstances.sample(false, fraction);
 
             double[] prev_w = this.baseLearner.getDenseWeights();

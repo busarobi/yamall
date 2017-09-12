@@ -116,6 +116,20 @@ public class Train {
         learner.train(input);
 
         if (! inputDirTest.isEmpty()){
+            double testLoss = Evaluate.getLoss(sparkContext,inputDirTest,learner, bitsHash);
+            String line = String.format("%d %f %f %f\n", numSamples, testLoss);
+            strb.append(line);
+
+            System.out.print(method + " " + line);
+            Evaluate.computeResult(strb,sparkContext,inputDirTest,learner, bitsHash);
+            saveLog();
+
+
+            if (saveModelFlag) {
+                ModelSerializationToHDFS.saveModel(outputDir, learner);
+            }
+
+
             Evaluate.computeResult(strb,sparkContext,inputDirTest,learner,bitsHash);
         }
 
