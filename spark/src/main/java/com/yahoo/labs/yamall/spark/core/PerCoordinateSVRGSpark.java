@@ -17,7 +17,7 @@ import java.util.List;
 /**
  * Created by busafekete on 8/29/17.
  */
-public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLearner {
+public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements LearnerSpark {
 
     protected int bitsHash = 22;
     protected int sparkIter = 1;
@@ -72,7 +72,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
         init(sparkConf);
     }
 
-    private void endBatchPhase(BatchGradient.BatchGradientData batchgradient) {
+    private void endBatchPhaseSpark(BatchGradient.BatchGradientData batchgradient) {
         gatherGradientIter = batchgradient.gatherGradIter;
         totalSamplesSeen += batchgradient.gatherGradIter;
 
@@ -152,12 +152,12 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements SparkLe
             saveLog();
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // compute gradient
-            fraction = Math.min((10*getBatchLength()) / ((double) sampleSize),1.0);
+            fraction = Math.min((getBatchLength()) / ((double) sampleSize),1.0);
             JavaRDD<Instance> subsamp = inputInstances.sample(false, fraction);
 
             double[] prev_w = this.baseLearner.getDenseWeights();
             BatchGradient.BatchGradientData batchgradient = BatchGradient.computeGradient(subsamp,bitsHash,prev_w);
-            endBatchPhase(batchgradient);
+            endBatchPhaseSpark(batchgradient);
 
             int ind = checkIsInf(batchgradient.getGbatch());
             if (ind >= 0) {

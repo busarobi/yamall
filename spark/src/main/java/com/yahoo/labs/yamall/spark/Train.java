@@ -2,7 +2,7 @@ package com.yahoo.labs.yamall.spark;
 
 import com.yahoo.labs.yamall.parser.VWParser;
 import com.yahoo.labs.yamall.spark.core.PerCoordinateSVRGSpark;
-import com.yahoo.labs.yamall.spark.core.SparkLearner;
+import com.yahoo.labs.yamall.spark.core.LearnerSpark;
 import com.yahoo.labs.yamall.spark.gradient.BatchGradient;
 import com.yahoo.labs.yamall.spark.helper.Evaluate;
 import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
@@ -30,7 +30,7 @@ public class Train {
     protected static StringBuilder strb = new StringBuilder("");
 
     protected static String method = null;
-    protected static SparkLearner learner = null;
+    protected static LearnerSpark learner = null;
     protected static VWParser vwparser = null;
 
     protected static double minPrediction = -50.0;
@@ -89,7 +89,7 @@ public class Train {
         array.add(BatchGradient.SeqOp.class);
         array.add(PosteriorComputer.class);
 
-        array.add(SparkLearner.class);
+        array.add(LearnerSpark.class);
         array.add(PerCoordinateSVRGSpark.class);
 
 
