@@ -9,7 +9,7 @@ import org.testng.annotations.Test;
 public class HDFSDirectoryReaderTest {
     @Test
     public void testHDFSDirectoryReader() throws Exception {
-        String dirname = "/Users/busafekete/work/DistOpt/spark/datagz/";
+        String dirname = "/Users/busafekete/work/DistOpt/Clkb_data/";
         HDFSDirectoryReader hdfsreader = new HDFSDirectoryReader(dirname, 22);
         for(int i=0; i <2; i++ ) {
             int fileSize = 0;
