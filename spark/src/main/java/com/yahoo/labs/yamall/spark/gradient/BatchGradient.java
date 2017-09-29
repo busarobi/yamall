@@ -114,14 +114,14 @@ public class BatchGradient {
             obj2.doLazyUpdates();
 
             double sum = (double) (gatherGradIter + obj2.gatherGradIter);
-            gatherGradIter += obj2.gatherGradIter;
             for (int i = 0; i < size_hash; i++) {
-                localGbatch[i] = (gatherGradIter * localGbatch[i] + obj2.gatherGradIter * obj2.localGbatch[i]) / gatherGradIter;
+                localGbatch[i] = ((double)gatherGradIter/(gatherGradIter + obj2.gatherGradIter)) * localGbatch[i] + ((double)obj2.gatherGradIter/(gatherGradIter + obj2.gatherGradIter)) * obj2.localGbatch[i];
                 featureCounts[i] += obj2.featureCounts[i];
                 featureMax[i] = Math.max(featureMax[i], obj2.featureMax[i]);
-                lastUpdated[i] = gatherGradIter;
+                lastUpdated[i] = gatherGradIter + obj2.gatherGradIter;
 
             }
+            gatherGradIter += obj2.gatherGradIter;
             cumLoss = (gatherGradIter * cumLoss + obj2.gatherGradIter * obj2.cumLoss) / sum;
 //            gatherGradIter += obj2.gatherGradIter;
             normalizationFlag = true;
