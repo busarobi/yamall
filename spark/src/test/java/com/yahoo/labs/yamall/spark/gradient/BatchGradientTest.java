@@ -25,7 +25,7 @@ public class BatchGradientTest {
     protected static Random random = new Random(0);
     protected static int bits = 5;
     protected static int size_hash = 1 << bits;
-    protected static String inputDir = "/Users/busafekete/work/DistOpt/Clkb_data/";
+    protected static String inputDir = "/Users/busafekete/work/DistOpt/Clkb_small_data/";
 
     @BeforeMethod
     public void setUp() throws Exception {

@@ -9,10 +9,12 @@ import com.yahoo.labs.yamall.spark.gradient.BatchGradient;
 import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
 import com.yahoo.labs.yamall.spark.helper.StringToYamallInstance;
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaFutureAction;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Created by busafekete on 8/29/17.
@@ -82,7 +84,8 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
 
         for (int i=0; i<size_hash; i++) {
             lastUpdated[i] = gatherGradientIter;
-            negativeBatchGradient[i] = refBatchGrad[i]/gatherGradientIter;
+            //negativeBatchGradient[i] = refBatchGrad[i]/gatherGradientIter;
+            negativeBatchGradient[i] = refBatchGrad[i];
 
             featureScalings[i] = Math.max(featureScalings[i],refFeatureMax[i]);
             featureCounts[i] += refFeatureCounts[i];
@@ -100,7 +103,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
 
 
     @Override
-    public void train(JavaRDD<String> input) throws IOException {
+    public void train(JavaRDD<String> input) throws IOException, ExecutionException, InterruptedException {
         String line ="";
         //input.cache();
         //input.persist();
@@ -150,6 +153,10 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
             strb.append(line);
             System.out.println(line);
             saveLog();
+
+            double sgdFraction = (1.0 * batchSize ) / (double) sampleSize;
+            JavaFutureAction<List<Instance>> sgdInmemoryFutureAction = inputInstances.sample(false, sgdFraction).collectAsync();
+
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // compute gradient
             fraction = Math.min((getBatchLength()) / ((double) sampleSize),1.0);
@@ -167,7 +174,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
                 System.exit(0);
             }
             numSamples += batchgradient.getNum();
-            line = "--- Gbatch step: " + batchgradient.gatherGradIter + " Cum loss: " + batchgradient.cumLoss/batchgradient.gatherGradIter + "\n";
+            line = "--- Gbatch step: " + batchgradient.gatherGradIter + " Cum loss: " + batchgradient.cumLoss + "\n";
             System.out.println(line);
             strb.append(line);
             saveLog();
@@ -179,10 +186,11 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
                 int batchSize = getSGDPhaseLength();
                 strb.append("--- Gradient phase starts (" + batchSize + ")\n");
                 //inMemorySamples = inputInstances.takeSample(true, batchSize);
-                double sgdFraction = (1.0 * batchSize ) / (double) sampleSize;
+                //double sgdFraction = (1.0 * batchSize ) / (double) sampleSize;
                 numSamples += batchSize;
 
-                inMemorySamples = inputInstances.sample(false, sgdFraction).collect();
+                //inMemorySamples = inputInstances.sample(false, sgdFraction).collect();
+                inMemorySamples = sgdInmemoryFutureAction.get();
                 for (Instance sample : inMemorySamples) {
                     updateFeatureCounts(sample);
                     double score = this.updateSGDStep(sample);
@@ -200,7 +208,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
             double elapsedTime = clusteringRuntime / 1000.0;
             double elapsedTimeInhours = elapsedTime / 3600.0;
 
-            line = String.format("%d %f %f %f\n", numSamples, trainLoss, batchgradient.cumLoss/batchgradient.gatherGradIter, elapsedTimeInhours);
+            line = String.format("%d %f %f %f\n", numSamples, trainLoss, batchgradient.cumLoss, elapsedTimeInhours);
             strb.append(line);
             System.out.print(line);
 

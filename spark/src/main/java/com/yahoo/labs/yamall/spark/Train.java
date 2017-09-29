@@ -15,6 +15,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Created by busafekete on 8/29/17.
@@ -96,7 +97,7 @@ public class Train {
         return (Class[]) array.toArray();
     }
 
-    public static void run() throws IOException {
+    public static void run() throws IOException, ExecutionException, InterruptedException {
         SparkConf sparkConf = new SparkConf().setAppName("spark yamall (parallel training)");
         //sparkConf.registerKryoClasses(getKyroclassArray());
         JavaSparkContext sparkContext = new JavaSparkContext(sparkConf);
@@ -141,7 +142,7 @@ public class Train {
     }
 
 
-    public static void main(String[] args ) throws IOException {
+    public static void main(String[] args ) throws IOException, ExecutionException, InterruptedException {
         Train.run();
     }
 

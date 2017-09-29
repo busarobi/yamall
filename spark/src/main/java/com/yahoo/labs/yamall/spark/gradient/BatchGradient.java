@@ -97,8 +97,8 @@ public class BatchGradient {
                 lastUpdated[key] = gatherGradIter;
                 localGbatch[key] = currentAverageGrad;
             }
-
-
+            double currentLoss = lossFnc.lossValue(pred, sample.getLabel()) * sample.getWeight();
+            cumLoss += ( (cumLoss - currentLoss) / (double) gatherGradIter);
             return pred;
         }
 
