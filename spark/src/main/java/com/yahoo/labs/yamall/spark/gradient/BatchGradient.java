@@ -98,7 +98,7 @@ public class BatchGradient {
                 localGbatch[key] = currentAverageGrad;
             }
             double currentLoss = lossFnc.lossValue(pred, sample.getLabel()) * sample.getWeight();
-            cumLoss += ( (cumLoss - currentLoss) / (double) gatherGradIter);
+            cumLoss += ( (currentLoss - cumLoss) / (double) gatherGradIter);
             return pred;
         }
 
@@ -121,9 +121,10 @@ public class BatchGradient {
                 lastUpdated[i] = gatherGradIter + obj2.gatherGradIter;
 
             }
-            gatherGradIter += obj2.gatherGradIter;
             cumLoss = (gatherGradIter * cumLoss + obj2.gatherGradIter * obj2.cumLoss) / sum;
 //            gatherGradIter += obj2.gatherGradIter;
+
+            gatherGradIter += obj2.gatherGradIter;
             normalizationFlag = true;
 
 //            // naive aggregation which requires normalization after

@@ -100,6 +100,7 @@ public class BatchGradientTest {
 
         avgDifference /= (double) result.size_hash;
         System.out.println( String.format("Average difference: %.15f", avgDifference ) );
+        System.out.println( String.format("Cummulative loss: %.15f", result.cumLoss ) );
 
         Assert.assertEquals(avgDifference, 0.0, 0.0000001);
     }
