@@ -31,6 +31,8 @@ public class BatchGradient {
         protected int bits = 0;
         protected boolean normalizationFlag = false;
 
+        protected long[] lastUpdated;
+
 
         BatchGradientData (int b, double[] weights) {
             bits = b;
@@ -41,29 +43,59 @@ public class BatchGradient {
             localGbatch = new double[size_hash];
             featureCounts = new long[size_hash];
             featureMax = new double[size_hash];
+            lastUpdated = new long[size_hash];
         }
 
         public double accumulateGradient(Instance sample) {
+//            gatherGradIter++;
+//
+//            double pred = predict(sample);
+//            //pred = Math.min(Math.max(pred, minPrediction), maxPrediction);
+//
+//            final double grad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
+//
+//
+//            if (Math.abs(grad) > 1e-8) {
+//                sample.getVector().addScaledSparseVectorToDenseVector(localGbatch, grad);
+//            }
+//            cumLoss += lossFnc.lossValue(pred, sample.getLabel()) * sample.getWeight();
+//
+//            for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
+//                int key = entry.getIntKey();
+//                double absVal = Math.abs(entry.getDoubleValue());
+//                if ( absVal > featureMax[key])
+//                    featureMax[key] = absVal;
+//
+//                featureCounts[key]++;
+//            }
+//
+
+
+            //maybe more stable averaging
             gatherGradIter++;
 
             double pred = predict(sample);
-            //pred = Math.min(Math.max(pred, minPrediction), maxPrediction);
 
-            final double grad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
+            final double negativeGrad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
 
-
-            if (Math.abs(grad) > 1e-8) {
-                sample.getVector().addScaledSparseVectorToDenseVector(localGbatch, grad);
-            }
-            cumLoss += lossFnc.lossValue(pred, sample.getLabel()) * sample.getWeight();
-
-            for (Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
+            for(Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
                 int key = entry.getIntKey();
+
                 double absVal = Math.abs(entry.getDoubleValue());
                 if ( absVal > featureMax[key])
                     featureMax[key] = absVal;
-
                 featureCounts[key]++;
+
+                double x_i = entry.getDoubleValue();
+                double negativeGrad_i = x_i * negativeGrad;
+                double currentAverageGrad = localGbatch[key];
+                if(lastUpdated[key] < gatherGradIter - 1) {
+                    currentAverageGrad *= ((double) lastUpdated[key] / (double) (gatherGradIter - 1));
+                }
+
+                currentAverageGrad += (negativeGrad_i - currentAverageGrad) / gatherGradIter;
+                lastUpdated[key] = gatherGradIter;
+                localGbatch[key] = currentAverageGrad;
             }
 
 
@@ -75,17 +107,24 @@ public class BatchGradient {
         }
 
         public void aggregate(BatchGradientData  obj2) {
-            this.normalizeBatchGradient();
-            obj2.normalizeBatchGradient();
+//            this.normalizeBatchGradient();
+//            obj2.normalizeBatchGradient();
+
+            this.doLazyUpdates();
+            obj2.doLazyUpdates();
 
             double sum = (double) (gatherGradIter + obj2.gatherGradIter);
+            gatherGradIter += obj2.gatherGradIter;
             for (int i = 0; i < size_hash; i++) {
-                localGbatch[i] = (gatherGradIter * localGbatch[i] + obj2.gatherGradIter * obj2.localGbatch[i]) / sum;
+                localGbatch[i] = (gatherGradIter * localGbatch[i] + obj2.gatherGradIter * obj2.localGbatch[i]) / gatherGradIter;
                 featureCounts[i] += obj2.featureCounts[i];
                 featureMax[i] = Math.max(featureMax[i], obj2.featureMax[i]);
+                lastUpdated[i] = gatherGradIter;
+
             }
             cumLoss = (gatherGradIter * cumLoss + obj2.gatherGradIter * obj2.cumLoss) / sum;
-            gatherGradIter += obj2.gatherGradIter;
+//            gatherGradIter += obj2.gatherGradIter;
+            normalizationFlag = true;
 
 //            // naive aggregation which requires normalization after
 //            gatherGradIter += obj2.gatherGradIter;
@@ -106,6 +145,15 @@ public class BatchGradient {
                     cumLoss /= (double) gatherGradIter;
                     normalizationFlag = true;
                 }
+            }
+        }
+
+        protected void doLazyUpdates() {
+            for(int i=0; i<size_hash; i++) {
+                if (lastUpdated[i] < gatherGradIter) {
+                    localGbatch[i] *= (double) lastUpdated[i] / (double) gatherGradIter;
+                }
+                lastUpdated[i] = gatherGradIter;
             }
         }
 
@@ -145,7 +193,7 @@ public class BatchGradient {
     public static BatchGradientData computeGradient(JavaRDD<Instance> data, int bit, double[] w ){
         BatchGradientData batchgradient = data.treeAggregate(new BatchGradientData(bit, w), new SeqOp(), new CombOp(), 5);
 //        BatchGradientData batchgradient = data.aggregate(new BatchGradientData(bit, w), new SeqOp(), new CombOp());
-//      batchgradient.normalizeBatchGradient();
+//        batchgradient.normalizeBatchGradient();
         return batchgradient;
     }
 }
