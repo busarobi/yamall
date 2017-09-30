@@ -75,6 +75,7 @@ public class BatchGradient {
             gatherGradIter++;
 
             double pred = predict(sample);
+            pred = Math.min(Math.max(pred, minPrediction), maxPrediction);
 
             final double negativeGrad = lossFnc.negativeGradient(pred, sample.getLabel(), sample.getWeight());
 
@@ -97,6 +98,7 @@ public class BatchGradient {
                 lastUpdated[key] = gatherGradIter;
                 localGbatch[key] = currentAverageGrad;
             }
+
             double currentLoss = lossFnc.lossValue(pred, sample.getLabel()) * sample.getWeight();
             cumLoss += ( (currentLoss - cumLoss) / (double) gatherGradIter);
             return pred;

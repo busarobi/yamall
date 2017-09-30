@@ -77,6 +77,7 @@ public class BatchGradientTest {
         // weight
         double[] w = new double[size_hash];
         for( int i = 0; i < size_hash; i++ ) w[i] = (2.0 * random.nextDouble()) - 1.0;
+        //for( int i = 0; i < size_hash; i++ ) w[i] = 0.0;
 
         // spark version
         JavaSparkContext sparkContext = new JavaSparkContext("local[*]", "Test");
