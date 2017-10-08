@@ -101,14 +101,18 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         baseLearner.updateFromNegativeGrad(SparseVector.dense2Sparse(featureScalings),  SparseVector.dense2Sparse(negativeBatchGradient));
     }
 
-    protected JavaRDD<Instance>[] getRDDs(JavaRDD<Instance> data, long sampleSize) {
+    protected JavaRDD<Instance>[] getRDDs(JavaRDD<String> input) {
+        long sampleSize = input.count();
+        strb.append("--- Input instances: " + sampleSize + "\n");
+        JavaRDD<Instance> data = input.map(new StringToYamallInstance(bitsHash));
+
         // sampleSize \approx batchSize + sparkIter * batchSize + batchSize * ( sparkIter * (sparkIter - 1 ) / 2 )
         // 2 * sampleSize / batchSize \approx 2 +  sparkIter + (sparkIter * sparkIter)
         // 0 \approx ( 2 - 2 * sampleSize / batchSize) +  sparkIter + (sparkIter * sparkIter)
         double solution = (-1.0 + Math.sqrt( 1 - 4 * ( 2 - 2 * sampleSize / batchSize) ) ) / 2.0;
-        strb.append( "--- Solution: " + solution + "\n");
+        strb.append( "--- Solution of ( 2 - 2 * sampleSize / batchSize) +  sparkIter + (sparkIter * sparkIter): " + solution + "\n");
         sparkIter = (int) Math.floor(solution);
-        strb.append( "--- sparkIter is corrected: " + sparkIter + "\n");
+        strb.append( "--- !!!!!!!!!!! Iter is corrected to " + sparkIter + "\n");
         double[] weights = new double[2 * sparkIter + 1];
         weights[0] = 1.0;
         for(int i = 0; i < sparkIter; i++ ){
@@ -123,49 +127,26 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
     @Override
     public void train(JavaRDD<String> input) throws IOException, ExecutionException, InterruptedException {
         String line ="";
-        //input.cache();
-        //input.persist();
+        JavaRDD<Instance>[] inputInstancesSplit =  getRDDs(input);
+        saveLog();
 
-        long sampleSize = input.count();
-        strb.append("--- Input instances: " + sampleSize + "\n");
         long numSamples = 0;
-
-
-        // TODO: fraction should be set addaptively
-        //double fraction = 1.0 / ((double) sampleSize);
-        double fraction = Math.min((getBatchLength()) / ((double) sampleSize),1.0);
-        System.out.println("--- Fraction: " + fraction);
-        strb.append("--- Fraction: " + fraction + "\n");
-
-
         long clusterStartTime = System.currentTimeMillis();
-
-        //input.persist(StorageLevel.MEMORY_AND_DISK());
-        JavaRDD<Instance> inputInstances = input.map(new StringToYamallInstance(bitsHash));
-        //inputInstances.persist(StorageLevel.MEMORY_AND_DISK());
-
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // burn in
         strb.append("--- Burn-in starts (" +getBurnInLength() + ")\n");
-        saveLog();
 
-        // old
-//        double burnInFraction = (1.0 * getBurnInLength() ) / (double) sampleSize;
-//        numSamples += getBurnInLength();
-//        List<Instance> inMemorySamples = inputInstances.sample(false, burnInFraction).collect();
-
-        //
-        JavaRDD<Instance>[] inputInstancesSplit =  getRDDs(inputInstances, sampleSize);
         List<Instance> inMemorySamples = inputInstancesSplit[0].collect();
-
         numSamples += inMemorySamples.size();
+
         double burninCumLoss = 0.0;
         for(Instance sample : inMemorySamples) {
             updateFeatureCounts(sample);
             double score = this.updateBurnIn(sample);
             burninCumLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
         }
+
         endBurnInPhase();
         strb.append("--- Burn-in is ready, sample size: " + inMemorySamples.size() + "\n--- cummulative loss: " + (burninCumLoss / (double) inMemorySamples.size())  + "\n" );
         saveLog();
@@ -178,13 +159,9 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
             System.out.println(line);
             saveLog();
 
-            //double sgdFraction = (1.0 * batchSize ) / (double) sampleSize;
-            //JavaFutureAction<List<Instance>> sgdInmemoryFutureAction = inputInstances.sample(false, sgdFraction).collectAsync();
             JavaFutureAction<List<Instance>> sgdInmemoryFutureAction = inputInstancesSplit[2*i+2].collectAsync();
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // compute gradient
-            //fraction = Math.min((getBatchLength()) / ((double) sampleSize),1.0);
-            //JavaRDD<Instance> subsamp = inputInstances.sample(false, fraction);
             JavaRDD<Instance> subsamp = inputInstancesSplit[2*i+1];
 
             double[] prev_w = this.baseLearner.getDenseWeights();
@@ -208,12 +185,6 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
             if (! miniBatchSGD) {
                 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
                 // grad step
-                int batchSize = getSGDPhaseLength();
-                //strb.append("--- Gradient phase starts (" + batchSize + ")\n");
-                //inMemorySamples = inputInstances.takeSample(true, batchSize);
-                //double sgdFraction = (1.0 * batchSize ) / (double) sampleSize;
-
-                //inMemorySamples = inputInstances.sample(false, sgdFraction).collect();
                 inMemorySamples = sgdInmemoryFutureAction.get();
                 numSamples += inMemorySamples.size();
                 for (Instance sample : inMemorySamples) {
