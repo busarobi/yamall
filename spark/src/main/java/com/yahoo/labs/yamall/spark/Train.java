@@ -116,22 +116,19 @@ public class Train {
         learner = new PerCoordinateSVRGSpark(sparkConf,strb,bitsHash);
         learner.train(input);
 
+        if (saveModelFlag) {
+            ModelSerializationToHDFS.saveModel(outputDir, learner);
+        }
+
         if (! inputDirTest.isEmpty()){
             double testLoss = Evaluate.getLoss(sparkContext,inputDirTest,learner, bitsHash);
-            String line = String.format("%d %f %f %f\n", numSamples, testLoss);
+            String line = String.format("%d %f\n", numSamples, testLoss);
             strb.append(line);
+            saveLog();
 
             System.out.print(method + " " + line);
             Evaluate.computeResult(strb,sparkContext,inputDirTest,learner, bitsHash);
             saveLog();
-
-
-            if (saveModelFlag) {
-                ModelSerializationToHDFS.saveModel(outputDir, learner);
-            }
-
-
-            Evaluate.computeResult(strb,sparkContext,inputDirTest,learner,bitsHash);
         }
 
         if (saveModelFlag) {

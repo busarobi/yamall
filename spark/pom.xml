@@ -87,7 +87,9 @@
             <version>2.2.0</version>
         </dependency>
     </dependencies>
-
+    <properties>
+        <skipTests>true</skipTests>
+    </properties>
     <build>
         <plugins>
             <plugin>

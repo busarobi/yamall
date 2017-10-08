@@ -101,6 +101,24 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         baseLearner.updateFromNegativeGrad(SparseVector.dense2Sparse(featureScalings),  SparseVector.dense2Sparse(negativeBatchGradient));
     }
 
+    protected JavaRDD<Instance>[] getRDDs(JavaRDD<Instance> data, long sampleSize) {
+        // sampleSize \approx batchSize + sparkIter * batchSize + batchSize * ( sparkIter * (sparkIter - 1 ) / 2 )
+        // 2 * sampleSize / batchSize \approx 2 +  sparkIter + (sparkIter * sparkIter)
+        // 0 \approx ( 2 - 2 * sampleSize / batchSize) +  sparkIter + (sparkIter * sparkIter)
+        double solution = (-1.0 + Math.sqrt( 1 - 4 * ( 2 - 2 * sampleSize / batchSize) ) ) / 2.0;
+        strb.append( "--- Solution: " + solution + "\n");
+        sparkIter = (int) Math.floor(solution);
+        strb.append( "--- sparkIter is corrected: " + sparkIter + "\n");
+        double[] weights = new double[2 * sparkIter + 1];
+        weights[0] = 1.0;
+        for(int i = 0; i < sparkIter; i++ ){
+            weights[2*i+1] = i+1.0;
+            weights[2*i+2] = 1.0;
+        }
+
+        JavaRDD<Instance>[] rddArray = data.randomSplit(weights);
+        return rddArray;
+    }
 
     @Override
     public void train(JavaRDD<String> input) throws IOException, ExecutionException, InterruptedException {
@@ -131,12 +149,18 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         // burn in
         strb.append("--- Burn-in starts (" +getBurnInLength() + ")\n");
         saveLog();
-        // slow
-        //List<Instance> inMemorySamples = inputInstances.takeSample(true, getBurnInLength());
-        double burnInFraction = (1.0 * getBurnInLength() ) / (double) sampleSize;
-        numSamples += getBurnInLength();
+
+        // old
+//        double burnInFraction = (1.0 * getBurnInLength() ) / (double) sampleSize;
+//        numSamples += getBurnInLength();
+//        List<Instance> inMemorySamples = inputInstances.sample(false, burnInFraction).collect();
+
+        //
+        JavaRDD<Instance>[] inputInstancesSplit =  getRDDs(inputInstances, sampleSize);
+        List<Instance> inMemorySamples = inputInstancesSplit[0].collect();
+
+        numSamples += inMemorySamples.size();
         double burninCumLoss = 0.0;
-        List<Instance> inMemorySamples = inputInstances.sample(false, burnInFraction).collect();
         for(Instance sample : inMemorySamples) {
             updateFeatureCounts(sample);
             double score = this.updateBurnIn(sample);
@@ -154,13 +178,14 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
             System.out.println(line);
             saveLog();
 
-            double sgdFraction = (1.0 * batchSize ) / (double) sampleSize;
-            JavaFutureAction<List<Instance>> sgdInmemoryFutureAction = inputInstances.sample(false, sgdFraction).collectAsync();
-
+            //double sgdFraction = (1.0 * batchSize ) / (double) sampleSize;
+            //JavaFutureAction<List<Instance>> sgdInmemoryFutureAction = inputInstances.sample(false, sgdFraction).collectAsync();
+            JavaFutureAction<List<Instance>> sgdInmemoryFutureAction = inputInstancesSplit[2*i+2].collectAsync();
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // compute gradient
-            fraction = Math.min((getBatchLength()) / ((double) sampleSize),1.0);
-            JavaRDD<Instance> subsamp = inputInstances.sample(false, fraction);
+            //fraction = Math.min((getBatchLength()) / ((double) sampleSize),1.0);
+            //JavaRDD<Instance> subsamp = inputInstances.sample(false, fraction);
+            JavaRDD<Instance> subsamp = inputInstancesSplit[2*i+1];
 
             double[] prev_w = this.baseLearner.getDenseWeights();
             BatchGradient.BatchGradientData batchgradient = BatchGradient.computeGradient(subsamp,bitsHash,prev_w);
@@ -174,7 +199,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
                 System.exit(0);
             }
             numSamples += batchgradient.getNum();
-            line = "--- Gbatch step: " + batchgradient.gatherGradIter + " Cum loss: " + batchgradient.cumLoss + "\n";
+            line = "--- Batch step     -- Sample size: " + batchgradient.gatherGradIter + " Cum. loss: " + batchgradient.cumLoss + "\n";
             System.out.println(line);
             strb.append(line);
             saveLog();
@@ -184,13 +209,13 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
                 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
                 // grad step
                 int batchSize = getSGDPhaseLength();
-                strb.append("--- Gradient phase starts (" + batchSize + ")\n");
+                //strb.append("--- Gradient phase starts (" + batchSize + ")\n");
                 //inMemorySamples = inputInstances.takeSample(true, batchSize);
                 //double sgdFraction = (1.0 * batchSize ) / (double) sampleSize;
-                numSamples += batchSize;
 
                 //inMemorySamples = inputInstances.sample(false, sgdFraction).collect();
                 inMemorySamples = sgdInmemoryFutureAction.get();
+                numSamples += inMemorySamples.size();
                 for (Instance sample : inMemorySamples) {
                     updateFeatureCounts(sample);
                     double score = this.updateSGDStep(sample);
@@ -198,7 +223,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
                 }
                 trainLoss /= (double) inMemorySamples.size();
                 endSGDPhase();
-                strb.append("--- Gradient phase is ready, sample size: " + inMemorySamples.size() + "\n--- cummulative loss: " + trainLoss  + "\n" );
+                strb.append("--- Gradient phase -- Sample size: " + inMemorySamples.size() + " Cum. loss: " + trainLoss  + "\n" );
             }
 
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////

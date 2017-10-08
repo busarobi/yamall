@@ -105,6 +105,7 @@ public class SparkSingleCoreTrain {
         strb.append("--- Number of test files: " + featureFilePathsTest.size() + "\n");
         strb.append("--- Eval period: " + evalPeriod + "\n");
         strb.append("--- Num of eval instaces: " + evalNumInstances + "\n");
+        strb.append(learner.toString() + "\n");
 
         System.out.println(strb.toString());
         saveLog();

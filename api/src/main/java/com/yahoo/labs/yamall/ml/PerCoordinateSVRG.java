@@ -77,8 +77,12 @@ public class PerCoordinateSVRG implements Learner {
 
     private void useReset(boolean flag) { this.doUseReset = flag; }
 
+    public void setSGDSize(int size) {
+        this.SGDSize = size;
+    }
+
     protected int getSGDPhaseLength() {
-        return SGDSize;
+        return this.SGDSize;
     }
 
     public int getBatchLength() {
@@ -139,9 +143,6 @@ public class PerCoordinateSVRG implements Learner {
 
     public void setRegularizationScaling(double reg) {
         regularizationScaling = reg;
-    }
-    public void setSGDSize(int size) {
-        this.SGDSize = size;
     }
 
     protected double updateSGDStep(Instance sample) {
@@ -249,18 +250,21 @@ public class PerCoordinateSVRG implements Learner {
         switch(state) {
             case BURN_IN:
                 if (BurnInIter >= getBurnInLength()) {
+                    //System.out.printf("---- Burning phase is finished (%d)\n", BurnInIter );
                     endBurnInPhase();
                     state = GATHER_GRADIENT;
                 }
                 break;
             case GATHER_GRADIENT:
                 if (gatherGradientIter >= getBatchLength()) {
+                    //System.out.printf("---- Gather gradient phase is finished (%d)\n", gatherGradientIter );
                     endBatchPhase();
                     state = SGD_PHASE;
                 }
                 break;
             case SGD_PHASE:
                 if (SGDIter >= getSGDPhaseLength()) {
+                    //System.out.printf("---- SGD phase is finished (%d)\n", BurnInIter );
                     endSGDPhase();
                     state = GATHER_GRADIENT;
                 }
@@ -309,10 +313,10 @@ public class PerCoordinateSVRG implements Learner {
     }
 
     public String toString() {
-        String tmp = "Using per-coordinate SVRG optimizer\n";
-        tmp = tmp + "learning rate = " + eta + "\n";
-        tmp = tmp + "batch size = " + SGDSize + "\n";
-        tmp = tmp + "Loss function = " + getLoss().toString();
+        String tmp = "---> Using per-coordinate SVRG optimizer\n";
+        tmp = tmp + "---> learning rate = " + eta + "\n";
+        tmp = tmp + "---> batch size = " + SGDSize + "\n";
+        tmp = tmp + "---> Loss function = " + getLoss().toString();
         return tmp;
     }
 
