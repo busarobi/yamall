@@ -36,12 +36,11 @@ public class Train {
 
     protected static double minPrediction = -50.0;
     protected static double maxPrediction = 50.0;
-
     protected static double cumLoss = 0.0;
     protected static long numSamples = 0;
     protected static boolean saveModelFlag = false;
     protected static int inputPartition = 0;
-    protected static int iter = 10;
+
 
     public static void init(SparkConf sparkConf) throws IOException {
         FSDataInputStream fs ;
@@ -50,7 +49,7 @@ public class Train {
         inputDir = sparkConf.get("spark.myapp.input");
         inputDirTest = sparkConf.get("spark.myapp.test");
 
-        iter = Integer.parseInt(sparkConf.get("spark.myapp.iter"));
+
         bitsHash = Integer.parseInt(sparkConf.get("spark.myapp.bitshash", "23"));
 
         inputPartition = Integer.parseInt(sparkConf.get("spark.myapp.inputpartition", "0"));
@@ -70,7 +69,6 @@ public class Train {
 
         strb.append("--- Input partition: " + inputPartition + "\n" );
         strb.append("--- Method: " + method + "\n");
-        strb.append("--- Iter: " + iter + "\n");
         strb.append("--- Bits hash: " + bitsHash + "\n");
 
         System.out.println(strb.toString());
@@ -130,12 +128,6 @@ public class Train {
             Evaluate.computeResult(strb,sparkContext,inputDirTest,learner, bitsHash);
             saveLog();
         }
-
-        if (saveModelFlag) {
-            String modelFile = "/model.bin";
-            ModelSerializationToHDFS.saveModel(outputDir, learner);
-        }
-
     }
 
 
