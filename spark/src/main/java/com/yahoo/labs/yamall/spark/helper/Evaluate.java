@@ -2,16 +2,15 @@ package com.yahoo.labs.yamall.spark.helper;
 
 import com.yahoo.labs.yamall.ml.Learner;
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaDoubleRDD;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics;
 import scala.Tuple2;
 
 import java.io.IOException;
-import java.util.List;
 
 /**
  * Created by busafekete on 8/29/17.
@@ -21,13 +20,20 @@ public class Evaluate {
     public static double getLoss(JavaSparkContext sparkContext, String inputDir, Learner learner, int bitsHash) {
         JavaRDD<String> input = sparkContext.textFile(inputDir );
         JavaPairRDD<String, Tuple2> lossesAndLables = input.mapToPair(new LossComputer(learner, bitsHash));
-        JavaRDD<Double> losses = lossesAndLables.map( (Function<Tuple2<String,Tuple2>,Double>) tup -> ((double)tup._2()._1()) );
-        List<Double> loss = losses.collect();
+        JavaDoubleRDD losses = lossesAndLables.mapToDouble( tup -> ((double)tup._2()._1()) );
+        double avgloss = losses.mean();
 
-        double avg = 0.0;
-        for (Double l : loss) avg += l;
-        return (avg / (double)loss.size());
+        return avgloss;
     }
+
+    public static double getLoss(JavaRDD<String> input, Learner learner, int bitsHash) {
+        JavaPairRDD<String, Tuple2> lossesAndLables = input.mapToPair(new LossComputer(learner, bitsHash));
+        JavaDoubleRDD losses = lossesAndLables.mapToDouble( tup -> ((double)tup._2()._1()) );
+        double avgloss = losses.mean();
+
+        return avgloss;
+    }
+
 
 //    public static void getLossAndCount(JavaSparkContext sparkContext, String inputDir, Learner learner, int bitsHash, StringBuffer strb ) {
 //        JavaRDD<String> input = sparkContext.textFile(inputDir );

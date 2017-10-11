@@ -6,6 +6,7 @@ import com.yahoo.labs.yamall.ml.LogisticLoss;
 import com.yahoo.labs.yamall.ml.Loss;
 import com.yahoo.labs.yamall.ml.PerCoordinateSVRG;
 import com.yahoo.labs.yamall.spark.gradient.BatchGradient;
+import com.yahoo.labs.yamall.spark.helper.Evaluate;
 import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
 import com.yahoo.labs.yamall.spark.helper.StringToYamallInstance;
 import org.apache.spark.SparkConf;
@@ -32,6 +33,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
     protected String outputDir = "";
     protected int batchSize = 10000;
     protected int numSGDPartitions = 10;
+    protected JavaRDD<String> testRDD = null;
 
     public void init(SparkConf sparkConf) {
         outputDir = sparkConf.get("spark.myapp.outdir");
@@ -57,7 +59,9 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         System.out.println(strb.toString());
     }
 
-
+    public void setTestRDD(JavaRDD<String> input ){
+            this.testRDD = input;
+    }
 
     void saveLog() throws IOException {
         FileWriterToHDFS.writeToHDFS(logFile, strb.toString());
@@ -228,9 +232,11 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
 //                }
 //            }
         }
-        numSamples += burninSampleSize;
         endBurnInPhase();
-        strb.append("--- Burn-in is ready, sample size: " + burninSampleSize + "\n--- cummulative loss: " + (burninCumLoss / (double) inMemorySamples.size())  + "\n" );
+
+        numSamples += burninSampleSize;
+        double trainLoss = (burninCumLoss / (double) inMemorySamples.size());
+        strb.append("--- Burn-in is ready, sample size: " + burninSampleSize + "\n--- cummulative loss: " + trainLoss  + "\n" );
         saveLog();
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -268,29 +274,31 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
                 saveLog();
                 System.exit(0);
             }
+            trainLoss = ( numSamples * trainLoss + batchgradient.cumLoss * batchgradient.gatherGradIter ) / ((double) numSamples + batchgradient.gatherGradIter);
             numSamples += batchgradient.getNum();
             line = "--- Batch step     -- Sample size: " + batchgradient.gatherGradIter + " Cum. loss: " + batchgradient.cumLoss + "\n";
             System.out.println(line);
             strb.append(line);
             saveLog();
 
-            double trainLoss = 0.0;
+            double sgdTrainLoss = 0.0;
+            int gradientSampleSize = 0;
             if (! miniBatchSGD) {
                 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
                 // grad step
                 if (numSGDPartitions<=1) {                            //// it simply collects the corresponding RDD
                     inMemorySamples = sgdInmemoryFutureAction.get();
-                    numSamples += inMemorySamples.size();
                     for (Instance sample : inMemorySamples) {
                         updateFeatureCounts(sample);
                         double score = this.updateSGDStep(sample);
-                        trainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
+                        sgdTrainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
                     }
                     trainLoss /= (double) inMemorySamples.size();
                     endSGDPhase();
                     strb.append("--- Gradient phase -- Sample size: " + inMemorySamples.size() + " Cum. loss: " + trainLoss + "\n");
+
+                    gradientSampleSize = inMemorySamples.size();
                 } else {
-                    int gradientSampleSize = 0;
                     for( int ri = 1; ri < numSGDPartitions; ri ++ ){
                         JavaFutureAction<List<Instance>> nextaction = sgdSplit[ri].collectAsync();
                         inMemorySamples = faction.get();
@@ -300,7 +308,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
                         for (Instance sample : inMemorySamples) {
                             updateFeatureCounts(sample);
                             double score = this.updateSGDStep(sample);
-                            trainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
+                            sgdTrainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
                             gradientSampleSize++;
                         }
                         faction = nextaction;
@@ -313,29 +321,36 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
                     for (Instance sample : inMemorySamples) {
                         updateFeatureCounts(sample);
                         double score = this.updateSGDStep(sample);
-                        trainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
+                        sgdTrainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
                         gradientSampleSize++;
                     }
 
-                    trainLoss /= (double) gradientSampleSize;
                     endSGDPhase();
-                    strb.append("--- Gradient phase -- Sample size: " + gradientSampleSize + " Cum. loss: " + trainLoss + "\n");
-
+                    strb.append("--- Gradient phase -- Sample size: " + gradientSampleSize + " Cum. loss: " + (sgdTrainLoss/(double)gradientSampleSize) + "\n");
                 }
             }
 
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // info
+            trainLoss = (numSamples*trainLoss+sgdTrainLoss)/((double)numSamples+gradientSampleSize);
+            numSamples += gradientSampleSize;
 
             long clusteringRuntime = System.currentTimeMillis() - clusterStartTime;
             double elapsedTime = clusteringRuntime / 1000.0;
             double elapsedTimeInhours = elapsedTime / 3600.0;
 
-            line = String.format("%d %f %f %f\n", numSamples, trainLoss, batchgradient.cumLoss, elapsedTimeInhours);
+            line = String.format("--- Num of samples: %d\tTrain loss: %f\tElapsed time: %f\n", numSamples, trainLoss, elapsedTimeInhours);
             strb.append(line);
             System.out.print(line);
-
             saveLog();
+
+            if (testRDD != null ) {
+                double testLoss = Evaluate.getLoss(this.testRDD, this.baseLearner, this.bitsHash);
+                line = String.format("%d %f %f %f\n", numSamples, trainLoss, testLoss, elapsedTimeInhours);
+                strb.append(line);
+                saveLog();
+            }
+
 
             //////////////////////////////////////////////////////////////////////////////////////////////////////////
         }

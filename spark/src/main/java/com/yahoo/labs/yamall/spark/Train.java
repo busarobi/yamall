@@ -47,7 +47,7 @@ public class Train {
 
         outputDir = sparkConf.get("spark.myapp.outdir");
         inputDir = sparkConf.get("spark.myapp.input");
-        inputDirTest = sparkConf.get("spark.myapp.test");
+        inputDirTest = sparkConf.get("spark.myapp.test","");
 
 
         bitsHash = Integer.parseInt(sparkConf.get("spark.myapp.bitshash", "23"));
@@ -109,9 +109,13 @@ public class Train {
         } else
             input = sparkContext.textFile(inputDir);
 
-
+        JavaRDD<String> testRDD = null;
         //long lineNum = input.count();
         learner = new PerCoordinateSVRGSpark(sparkConf,strb,bitsHash);
+        if (! inputDirTest.isEmpty()) {
+            testRDD = input = sparkContext.textFile(inputDirTest);
+            learner.setTestRDD(testRDD);
+        }
         learner.train(input);
 
         if (saveModelFlag) {
@@ -119,7 +123,7 @@ public class Train {
         }
 
         if (! inputDirTest.isEmpty()){
-            double testLoss = Evaluate.getLoss(sparkContext,inputDirTest,learner, bitsHash);
+            double testLoss = Evaluate.getLoss(testRDD,learner, bitsHash);
             String line = String.format("%d %f\n", numSamples, testLoss);
             strb.append(line);
             saveLog();
