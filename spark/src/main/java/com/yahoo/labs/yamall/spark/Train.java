@@ -113,7 +113,7 @@ public class Train {
         //long lineNum = input.count();
         learner = new PerCoordinateSVRGSpark(sparkConf,strb,bitsHash);
         if (! inputDirTest.isEmpty()) {
-            testRDD = input = sparkContext.textFile(inputDirTest);
+            testRDD = sparkContext.textFile(inputDirTest);
             learner.setTestRDD(testRDD);
         }
         learner.train(input);
@@ -124,7 +124,7 @@ public class Train {
 
         if (! inputDirTest.isEmpty()){
             double testLoss = Evaluate.getLoss(testRDD,learner, bitsHash);
-            String line = String.format("%d %f\n", numSamples, testLoss);
+            String line = String.format("---+++ Test loss: %f Number of instances: %d\n", testRDD.count(), testLoss);
             strb.append(line);
             saveLog();
 

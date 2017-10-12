@@ -25,13 +25,13 @@ import java.util.concurrent.ExecutionException;
  */
 public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements LearnerSpark {
 
-    protected int bitsHash = 22;
+    protected int bitsHash = 23;
     protected int sparkIter = 1;
     protected String logFile = "log.txt";
     protected StringBuilder strb = new StringBuilder("");
     protected boolean miniBatchSGD = false;
     protected String outputDir = "";
-    protected int batchSize = 10000;
+    protected int batchSize = 100000;
     protected int numSGDPartitions = 10;
     protected JavaRDD<String> testRDD = null;
 
@@ -59,8 +59,8 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         System.out.println(strb.toString());
     }
 
-    public void setTestRDD(JavaRDD<String> input ){
-            this.testRDD = input;
+    public void setTestRDD(JavaRDD<String> inputTest ){
+            this.testRDD = inputTest;
     }
 
     void saveLog() throws IOException {
@@ -155,7 +155,6 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         JavaRDD<Instance>[] inputInstancesSplit =  getRDDs(input);
         saveLog();
 
-        long numSamples = 0;
         long clusterStartTime = System.currentTimeMillis();
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -234,8 +233,8 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         }
         endBurnInPhase();
 
-        numSamples += burninSampleSize;
-        double trainLoss = (burninCumLoss / (double) inMemorySamples.size());
+        double trainLoss = (burninCumLoss / (double) burninSampleSize);
+        long numSamples = burninSampleSize;
         strb.append("--- Burn-in is ready, sample size: " + burninSampleSize + "\n--- cummulative loss: " + trainLoss  + "\n" );
         saveLog();
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -275,7 +274,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
                 System.exit(0);
             }
             trainLoss = ( numSamples * trainLoss + batchgradient.cumLoss * batchgradient.gatherGradIter ) / ((double) numSamples + batchgradient.gatherGradIter);
-            numSamples += batchgradient.getNum();
+            numSamples += batchgradient.gatherGradIter;
             line = "--- Batch step     -- Sample size: " + batchgradient.gatherGradIter + " Cum. loss: " + batchgradient.cumLoss + "\n";
             System.out.println(line);
             strb.append(line);
@@ -292,12 +291,9 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
                         updateFeatureCounts(sample);
                         double score = this.updateSGDStep(sample);
                         sgdTrainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
+                        gradientSampleSize++;
                     }
-                    trainLoss /= (double) inMemorySamples.size();
                     endSGDPhase();
-                    strb.append("--- Gradient phase -- Sample size: " + inMemorySamples.size() + " Cum. loss: " + trainLoss + "\n");
-
-                    gradientSampleSize = inMemorySamples.size();
                 } else {
                     for( int ri = 1; ri < numSGDPartitions; ri ++ ){
                         JavaFutureAction<List<Instance>> nextaction = sgdSplit[ri].collectAsync();
@@ -324,10 +320,9 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
                         sgdTrainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
                         gradientSampleSize++;
                     }
-
                     endSGDPhase();
-                    strb.append("--- Gradient phase -- Sample size: " + gradientSampleSize + " Cum. loss: " + (sgdTrainLoss/(double)gradientSampleSize) + "\n");
                 }
+                strb.append("--- Gradient phase -- Sample size: " + gradientSampleSize + " Cum. loss: " + (sgdTrainLoss/(double)gradientSampleSize) + "\n");
             }
 
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////
