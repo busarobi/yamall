@@ -124,7 +124,7 @@ public class Train {
 
         if (! inputDirTest.isEmpty()){
             double testLoss = Evaluate.getLoss(testRDD,learner, bitsHash);
-            String line = String.format("---+++ Test loss: %f Number of instances: %d\n", testRDD.count(), testLoss);
+            String line = String.format("---+++ Test loss: %d Number of instances: %d\n", testRDD.count(), testLoss);
             strb.append(line);
             saveLog();
 
