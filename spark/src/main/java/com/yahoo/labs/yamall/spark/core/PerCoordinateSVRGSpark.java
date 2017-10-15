@@ -124,6 +124,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         strb.append( "--- Solution of ( 2 - 2 * sampleSize / batchSize) +  sparkIter + (sparkIter * sparkIter): " + solution + "\n");
         sparkIter = (int) Math.floor(solution);
         strb.append( "--- !!!!!!!!!!! Iter is corrected to " + sparkIter + "\n");
+
         double[] weights = new double[sparkIter + 1];
         weights[0] = 1.0;
         for(int i = 0; i < sparkIter; i++ ){
@@ -132,6 +133,9 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         }
 
         JavaRDD<Instance>[] rddArray = data.randomSplit(weights);
+        batchSize = (int)rddArray[0].count()/(sparkIter + 1);
+        this.setSGDSize(batchSize);
+
         return rddArray;
     }
 
@@ -153,6 +157,8 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
     @Override
     public void train(JavaRDD<String> input) throws IOException, ExecutionException, InterruptedException {
         String line ="";
+        int numBufferedPartitions = 5;
+
         JavaRDD<Instance>[] inputInstancesSplit =  getRDDs(input);
         saveLog();
 
@@ -168,7 +174,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
 
         //setup an iterator over the SGD elements.
         //it buffers 5 partitions worth of instances for now. can be tuned for performance if desired.
-        AsyncLocalIterator sgdIterator = new AsyncLocalIterator(inputInstancesSplit[0], 5);
+        AsyncLocalIterator sgdIterator = new AsyncLocalIterator(inputInstancesSplit[0], numBufferedPartitions);
 
         while(sgdIterator.hasNext() && burninSampleSize < this.getBurnInLength()) {
             Instance sample = sgdIterator.next();

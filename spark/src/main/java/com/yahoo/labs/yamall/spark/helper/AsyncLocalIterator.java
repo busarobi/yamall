@@ -87,6 +87,10 @@ public class AsyncLocalIterator implements Iterator<Instance>, Serializable {
         } catch ( org.apache.spark.SparkException e ) {
             throw new RuntimeException(e);
         }
+
+        if(currentIterator == null) {
+            return false;
+        }
         return this.hasNext();
     }
 
@@ -107,6 +111,8 @@ public class AsyncLocalIterator implements Iterator<Instance>, Serializable {
 
         if(nextArray != null) {
             this.currentIterator = nextArray.iterator();
+        } else {
+            this.currentIterator = null;
         }
 
     }
