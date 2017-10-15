@@ -111,6 +111,7 @@ public class AsyncLocalIterator implements Iterator<Instance>, Serializable {
 
     }
 
+    @Override
     public Instance next() {
         try {
             if (this.currentIterator == null)
