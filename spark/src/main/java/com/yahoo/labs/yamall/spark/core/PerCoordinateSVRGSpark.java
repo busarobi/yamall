@@ -122,7 +122,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         double solution = (-1.0 + Math.sqrt( 1 - 4 * ( 2 - 2 * sampleSize / batchSize) ) ) / 2.0;
         strb.append( "--- Solution of ( 2 - 2 * sampleSize / batchSize) +  sparkIter + (sparkIter * sparkIter): " + solution + "\n");
         sparkIter = (int) Math.floor(solution);
-        strb.append( "--- !!!!!!!!!!! Iter is corrected to " + sparkIter + "\n");
+        strb.append( "--- !!!!!!!!!!! Number of iterations is tuned to " + sparkIter + "\n");
         double[] weights = new double[2 * sparkIter + 1];
         weights[0] = 1.0;
         for(int i = 0; i < sparkIter; i++ ){
