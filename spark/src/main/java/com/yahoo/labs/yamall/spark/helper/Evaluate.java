@@ -89,6 +89,51 @@ public class Evaluate {
         strb.append("+++ Area under ROC = " + metrics.areaUnderROC() + "\n");
     }
 
+    public static void computeExtendedResult(StringBuilder strb, JavaSparkContext sparkContext, String inputDir, Learner learner, int bitsHash, int numBins) {
+        JavaRDD<String> input = sparkContext.textFile(inputDir );
+        JavaPairRDD<String, Tuple2> posteriorsAndLables = input.mapToPair(new PosteriorComputer(learner, bitsHash));
+        JavaPairRDD<Object, Object> predictionAndLabels = posteriorsAndLables.values().mapToPair((PairFunction<Tuple2, Object, Object>) tup -> new Tuple2<>(tup._1(),tup._2()));
+
+        // Get evaluation metrics.
+        BinaryClassificationMetrics metrics =
+                new BinaryClassificationMetrics(predictionAndLabels.rdd(), numBins);
+
+        // Precision by threshold
+        JavaRDD<Tuple2<Object, Object>> precision = metrics.precisionByThreshold().toJavaRDD();
+        System.out.println("Precision by threshold: " + precision.collect());
+        strb.append("Precision by threshold: " + precision.collect() + "\n");
+
+        // Recall by threshold
+        JavaRDD<?> recall = metrics.recallByThreshold().toJavaRDD();
+        System.out.println("Recall by threshold: " + recall.collect());
+        strb.append("Recall by threshold: " + recall.collect() + "\n");
+
+        // F Score by threshold
+        JavaRDD<?> f1Score = metrics.fMeasureByThreshold().toJavaRDD();
+        System.out.println("F1 Score by threshold: " + f1Score.collect());
+        strb.append("F1 Score by threshold: " + f1Score.collect() + "\n" );
+
+        JavaRDD<?> f2Score = metrics.fMeasureByThreshold(2.0).toJavaRDD();
+        System.out.println("F2 Score by threshold: " + f2Score.collect());
+        strb.append("F2 Score by threshold: " + f2Score.collect() + "\n");
+
+        // Precision-recall curve
+        JavaRDD<?> prc = metrics.pr().toJavaRDD();
+        strb.append("Precision-recall curve: " + prc.collect()+"\n");
+
+        // Thresholds
+        JavaRDD<Double> thresholds = precision.map(t -> Double.parseDouble(t._1().toString()));
+
+        // ROC Curve
+        JavaRDD<?> roc = metrics.roc().toJavaRDD();
+        strb.append("+++ ROC curve: " + roc.collect() + "\n" );
+
+        // AUPRC
+        strb.append("+++ Area under precision-recall curve = " + metrics.areaUnderPR() + "\n" );
+        // AUC
+        strb.append("+++ Area under ROC = " + metrics.areaUnderROC() + "\n");
+    }
+
 
     public static void main(String[] args) throws IOException {
         SparkConf sparkConf = new SparkConf().setAppName("test evaluate");
@@ -96,25 +141,34 @@ public class Evaluate {
 
         String modelDir = sparkConf.get("spark.myapp.modeldir");
         String modelFname = sparkConf.get("spark.myapp.modelfile");
-
-        Learner learner = ModelSerializationToHDFS.loadModel(modelDir,modelFname);
-
         String inputDir = sparkConf.get("spark.myapp.inputdir");
         String output = sparkConf.get("spark.myapp.output");
+        int numBins = Integer.parseInt(sparkConf.get("spark.myapp.bins", "100"));
         int bitsHash = Integer.parseInt(sparkConf.get("spark.myapp.bitshash", "23"));
 
-
         StringBuilder strb = new StringBuilder("");
-
         strb.append( "Model: " + modelDir + "/" + modelFname + "\n" );
         strb.append( "Input: " + inputDir + "\n" );
         strb.append( "Output: " + output + "\n" );
+        strb.append( "Bit hash: " + bitsHash + "\n" );
+        strb.append( "Num of bins: " + numBins + "\n" );
+
+        System.out.println( strb.toString() + "\n" );
+
+        FileWriterToHDFS.writeToHDFS( output, strb.toString());
+
+        Learner learner = ModelSerializationToHDFS.loadModel(modelDir,modelFname);
+
 
         double loss = getLoss(sparkContext, inputDir, learner, bitsHash);
         strb.append( "Loss: " + loss + "\n");
 
         computeResult(strb, sparkContext, inputDir, learner, bitsHash);
 
+        System.out.println( strb.toString());
+        FileWriterToHDFS.writeToHDFS( output, strb.toString());
+
+        computeExtendedResult(strb, sparkContext, inputDir, learner, bitsHash, numBins);
         System.out.println( strb.toString());
         FileWriterToHDFS.writeToHDFS( output, strb.toString());
     }

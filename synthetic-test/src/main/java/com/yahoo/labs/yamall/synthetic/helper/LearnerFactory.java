@@ -12,7 +12,7 @@ public class LearnerFactory {
     public static Learner getLearner(Properties properties ){
         Learner learner = null;
         String method = properties.getProperty("method", null);
-        int bitsHash = Integer.parseInt(properties.getProperty("b", "22" ));
+        int bitsHash = Integer.parseInt(properties.getProperty("b", "23" ));
         double learningRate = Double.parseDouble(properties.getProperty("lr", "1.0"));
         System.out.println( "----> Method: " + method );
 

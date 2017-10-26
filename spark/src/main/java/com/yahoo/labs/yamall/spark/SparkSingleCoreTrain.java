@@ -33,7 +33,7 @@ public class SparkSingleCoreTrain {
 
     protected static String logFile = "";
 
-    protected static int bitsHash = 22;
+    protected static int bitsHash = 23;
     protected static StringBuilder strb = new StringBuilder("");
 
     protected static String method = null;
@@ -57,6 +57,7 @@ public class SparkSingleCoreTrain {
         inputDir = sparkConf.get("spark.myapp.input");
         inputDirTest = sparkConf.get("spark.myapp.test");
 
+        bitsHash = Integer.parseInt(sparkConf.get("spark.myapp.bitshash", "23"));
         method = sparkConf.get("spark.myapp.method");
         evalPeriod = Integer.parseInt(sparkConf.get("spark.myapp.evalperiod", "5000000"));
         saveModelFlag = Boolean.parseBoolean(sparkConf.get("spark.myapp.save_model", "false"));
@@ -105,6 +106,7 @@ public class SparkSingleCoreTrain {
         strb.append("--- Number of test files: " + featureFilePathsTest.size() + "\n");
         strb.append("--- Eval period: " + evalPeriod + "\n");
         strb.append("--- Num of eval instaces: " + evalNumInstances + "\n");
+        strb.append("--- Bit: " + bitsHash + "\n");
         strb.append(learner.toString() + "\n");
 
         System.out.println(strb.toString());

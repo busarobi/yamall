@@ -3,35 +3,18 @@
 // Please see LICENSE file in the project root for terms.
 package com.yahoo.labs.yamall.local;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.OutputStreamWriter;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.concurrent.TimeUnit;
-
-import com.yahoo.labs.yamall.ml.*;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
-
 import com.yahoo.labs.yamall.core.Instance;
+import com.yahoo.labs.yamall.ml.*;
 import com.yahoo.labs.yamall.parser.InstanceParser;
 import com.yahoo.labs.yamall.parser.LIBSVMParser;
 import com.yahoo.labs.yamall.parser.TSVParser;
 import com.yahoo.labs.yamall.parser.VWParser;
+import org.apache.commons.cli.*;
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.concurrent.TimeUnit;
 
 public class Yamall {
 
@@ -246,6 +229,9 @@ public class Yamall {
             }
             else if (cmd.hasOption("cocob")) {
                 learner = new COCOB(bitsHash);
+            }
+            else if (cmd.hasOption("pistol")) {
+                learner = new PerCoordinatePiSTOL(bitsHash);
             }
             else if (cmd.hasOption("pistol")) {
                 learner = new PerCoordinatePiSTOL(bitsHash);
