@@ -6,6 +6,7 @@ import com.yahoo.labs.yamall.ml.LogisticLoss;
 import com.yahoo.labs.yamall.ml.Loss;
 import com.yahoo.labs.yamall.ml.PerCoordinateSVRG;
 import com.yahoo.labs.yamall.spark.gradient.BatchGradient;
+import com.yahoo.labs.yamall.spark.helper.AsyncLocalIterator;
 import com.yahoo.labs.yamall.spark.helper.Evaluate;
 import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
 import com.yahoo.labs.yamall.spark.helper.StringToYamallInstance;
@@ -122,15 +123,19 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         double solution = (-1.0 + Math.sqrt( 1 - 4 * ( 2 - 2 * sampleSize / batchSize) ) ) / 2.0;
         strb.append( "--- Solution of ( 2 - 2 * sampleSize / batchSize) +  sparkIter + (sparkIter * sparkIter): " + solution + "\n");
         sparkIter = (int) Math.floor(solution);
-        strb.append( "--- !!!!!!!!!!! Number of iterations is tuned to " + sparkIter + "\n");
-        double[] weights = new double[2 * sparkIter + 1];
+        strb.append( "--- !!!!!!!!!!! Iter is corrected to " + sparkIter + "\n");
+
+        double[] weights = new double[sparkIter + 1];
         weights[0] = 1.0;
         for(int i = 0; i < sparkIter; i++ ){
-            weights[2*i+1] = i+1.0;
-            weights[2*i+2] = 1.0;
+            weights[i+1] = i+1.0;
+            weights[0] += 1.0;
         }
 
         JavaRDD<Instance>[] rddArray = data.randomSplit(weights);
+        batchSize = (int)rddArray[0].count()/(sparkIter + 1);
+        this.setSGDSize(batchSize);
+
         return rddArray;
     }
 
@@ -152,6 +157,8 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
     @Override
     public void train(JavaRDD<String> input) throws IOException, ExecutionException, InterruptedException {
         String line ="";
+        int numBufferedPartitions = 5;
+
         JavaRDD<Instance>[] inputInstancesSplit =  getRDDs(input);
         saveLog();
 
@@ -164,72 +171,17 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         double burninCumLoss = 0.0;
         List<Instance> inMemorySamples = null;
         JavaRDD<Instance>[] sgdSplit = null;
-        JavaFutureAction<List<Instance>> faction = null;
-        if (numSGDPartitions<=1) {     //// it simply collects the corresponding RDD
-            inMemorySamples = inputInstancesSplit[0].collect();
-            for (Instance sample : inMemorySamples) {
-                updateFeatureCounts(sample);
-                double score = this.updateBurnIn(sample);
-                burninCumLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
-                burninSampleSize++;
-            }
-        } else {
-            JavaRDD<Instance> currentPartition = inputInstancesSplit[0];
-            double[] weights = new double[numSGDPartitions];
-            for(int ri = 0; ri < numSGDPartitions; ri++ ){
-                weights[ri]=1.0;
-            }
-            sgdSplit = currentPartition.randomSplit(weights);
-            faction = sgdSplit[0].collectAsync();
-            for( int ri = 1; ri < numSGDPartitions; ri ++ ){
-                JavaFutureAction<List<Instance>> nextaction = sgdSplit[ri].collectAsync();
-                inMemorySamples = faction.get();
-                strb.append("---+++++++ Number of isntaces: " + inMemorySamples.size() + "\n");
-                saveLog();
 
-                for (Instance sample : inMemorySamples) {
-                    updateFeatureCounts(sample);
-                    double score = this.updateBurnIn(sample);
-                    burninCumLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
-                    burninSampleSize++;
-                }
-                faction = nextaction;
-            }
+        //setup an iterator over the SGD elements.
+        //it buffers 5 partitions worth of instances for now. can be tuned for performance if desired.
+        AsyncLocalIterator sgdIterator = new AsyncLocalIterator(inputInstancesSplit[0], numBufferedPartitions);
 
-            inMemorySamples = faction.get();
-            strb.append("---+++++++ Number of isntaces: " + inMemorySamples.size() + "\n");
-            saveLog();
-
-            for (Instance sample : inMemorySamples) {
-                updateFeatureCounts(sample);
-                double score = this.updateBurnIn(sample);
-                burninCumLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
-                burninSampleSize++;
-            }
-
-
-
-//            JavaRDD<Instance> currentPartition = inputInstancesSplit[0];
-//            List<Partition> lPatitions = currentPartition.partitions();
-//            strb.append("---+++ Number of partition in burn-in phase: " + lPatitions.size() + "\n");
-//            saveLog();
-//            for( Partition p : lPatitions ){
-//                // solution 1
-//                //int[] idx = {p.index()};
-//                //inMemorySamples = currentPartition.collectPartitions(idx)[0];
-//                // solution 2
-//                //JavaRDD<Instance> partRDD = currentPartition.mapPartitionsWithIndex( new SelectPartition(p.index()), true );
-//                //inMemorySamples = partRDD.collect();
-//                strb.append("---+++++++ Number of isnaces: " + inMemorySamples.size() + "\n");
-//                saveLog();
-//
-//                for (Instance sample : inMemorySamples) {
-//                    updateFeatureCounts(sample);
-//                    double score = this.updateBurnIn(sample);
-//                    burninCumLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
-//                    burninSampleSize++;
-//                }
-//            }
+        while(sgdIterator.hasNext() && burninSampleSize < this.getBurnInLength()) {
+            Instance sample = sgdIterator.next();
+            updateFeatureCounts(sample);
+            double score = this.updateBurnIn(sample);
+            burninCumLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
+            burninSampleSize++;
         }
         endBurnInPhase();
 
@@ -246,24 +198,12 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
             System.out.println(line);
             saveLog();
 
-            JavaFutureAction<List<Instance>> sgdInmemoryFutureAction = null;
-            if (numSGDPartitions<=1) {
-                sgdInmemoryFutureAction = inputInstancesSplit[2*i+2].collectAsync();
-            } else {
-                JavaRDD<Instance> currentPartition = inputInstancesSplit[2*i+2];
-                double[] weights = new double[numSGDPartitions];
-                for(int ri = 0; ri < numSGDPartitions; ri++ ){
-                    weights[ri]=1.0;
-                }
-                sgdSplit = currentPartition.randomSplit(weights);
-                faction = sgdSplit[0].collectAsync();
-            }
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // compute gradient
-            JavaRDD<Instance> subsamp = inputInstancesSplit[2*i+1];
+            JavaRDD<Instance> subsamp = inputInstancesSplit[i+1];
 
             double[] prev_w = this.baseLearner.getDenseWeights();
-            BatchGradient.BatchGradientData batchgradient = BatchGradient.computeGradient(subsamp,bitsHash,prev_w);
+            BatchGradient.BatchGradientData batchgradient = BatchGradient.computeGradient(subsamp, bitsHash, prev_w);
             endBatchPhaseSpark(batchgradient);
 
             int ind = checkIsInf(batchgradient.getGbatch());
@@ -285,43 +225,16 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
             if (! miniBatchSGD) {
                 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
                 // grad step
-                if (numSGDPartitions<=1) {                            //// it simply collects the corresponding RDD
-                    inMemorySamples = sgdInmemoryFutureAction.get();
-                    for (Instance sample : inMemorySamples) {
-                        updateFeatureCounts(sample);
-                        double score = this.updateSGDStep(sample);
-                        sgdTrainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
-                        gradientSampleSize++;
-                    }
-                    endSGDPhase();
-                } else {
-                    for( int ri = 1; ri < numSGDPartitions; ri ++ ){
-                        JavaFutureAction<List<Instance>> nextaction = sgdSplit[ri].collectAsync();
-                        inMemorySamples = faction.get();
-                        strb.append("---+++++++ Number of isntaces: " + inMemorySamples.size() + "\n");
-                        saveLog();
 
-                        for (Instance sample : inMemorySamples) {
-                            updateFeatureCounts(sample);
-                            double score = this.updateSGDStep(sample);
-                            sgdTrainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
-                            gradientSampleSize++;
-                        }
-                        faction = nextaction;
-                    }
-
-                    inMemorySamples = faction.get();
-                    strb.append("---+++++++ Number of isntaces: " + inMemorySamples.size() + "\n");
-                    saveLog();
-
-                    for (Instance sample : inMemorySamples) {
-                        updateFeatureCounts(sample);
-                        double score = this.updateSGDStep(sample);
-                        sgdTrainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
-                        gradientSampleSize++;
-                    }
-                    endSGDPhase();
+                while(sgdIterator.hasNext() && gradientSampleSize < this.getSGDPhaseLength()) {
+                    Instance sample = sgdIterator.next();
+                    updateFeatureCounts(sample);
+                    double score = this.updateSGDStep(sample);
+                    sgdTrainLoss += getLoss().lossValue(score, sample.getLabel()) * sample.getWeight();
+                    gradientSampleSize++;
                 }
+
+                endSGDPhase();
                 strb.append("--- Gradient phase -- Sample size: " + gradientSampleSize + " Cum. loss: " + (sgdTrainLoss/(double)gradientSampleSize) + "\n");
             }
 
