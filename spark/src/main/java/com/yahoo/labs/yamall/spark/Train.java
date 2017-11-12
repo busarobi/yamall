@@ -111,7 +111,15 @@ public class Train {
 
         JavaRDD<String> testRDD = null;
         //long lineNum = input.count();
-        learner = new PerCoordinateSVRGSpark(sparkConf,strb,bitsHash);
+
+        if (method.compareToIgnoreCase("svrg_fr_spark") == 0 ) {
+            learner = new PerCoordinateSVRGSpark(sparkConf, strb, bitsHash);
+        } else if (method.compareToIgnoreCase("mini_batch_sgd") == 0 ) {
+            PerCoordinateSVRGSpark mbsgd = new PerCoordinateSVRGSpark(sparkConf, strb, bitsHash);
+            mbsgd.useMiniBatchSGD();
+            learner = mbsgd;
+        }
+
         if (! inputDirTest.isEmpty()) {
             testRDD = sparkContext.textFile(inputDirTest);
             learner.setTestRDD(testRDD);
