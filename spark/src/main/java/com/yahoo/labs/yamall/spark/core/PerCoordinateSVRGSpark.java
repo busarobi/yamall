@@ -6,13 +6,16 @@ import com.yahoo.labs.yamall.ml.LogisticLoss;
 import com.yahoo.labs.yamall.ml.Loss;
 import com.yahoo.labs.yamall.ml.PerCoordinateSVRG;
 import com.yahoo.labs.yamall.spark.gradient.BatchGradient;
-import com.yahoo.labs.yamall.spark.helper.Evaluate;
-import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
-import com.yahoo.labs.yamall.spark.helper.StringToYamallInstance;
+import com.yahoo.labs.yamall.spark.helper.*;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaFutureAction;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.storage.StorageLevel;
+import scala.Tuple2;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -61,6 +64,19 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
 
     public void setTestRDD(JavaRDD<String> inputTest ){
             this.testRDD = inputTest;
+    }
+
+    @Override
+    public JavaPairRDD<Object, Object> getPosteriors(JavaSparkContext sparkContext, String inputDir) {
+        JavaRDD<String> input = sparkContext.textFile(inputDir );
+        JavaPairRDD<String, Tuple2> posteriorsAndLables = input.mapToPair(new PosteriorComputer(this, bitsHash));
+        JavaPairRDD<Object, Object> predictionAndLabels = posteriorsAndLables.values().mapToPair((PairFunction<Tuple2, Object, Object>) tup -> new Tuple2<>(tup._1(),tup._2()));
+        return predictionAndLabels;
+    }
+
+    @Override
+    public void saveModel(String path) throws IOException {
+        ModelSerializationToHDFS.saveModel(outputDir, this);
     }
 
     void saveLog() throws IOException {
@@ -115,6 +131,7 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
         long sampleSize = input.count();
         strb.append("--- Input instances: " + sampleSize + "\n");
         JavaRDD<Instance> data = input.map(new StringToYamallInstance(bitsHash));
+        data.persist(StorageLevel.MEMORY_AND_DISK());
 
         // sampleSize \approx batchSize + sparkIter * batchSize + batchSize * ( sparkIter * (sparkIter - 1 ) / 2 )
         // 2 * sampleSize / batchSize \approx 2 +  sparkIter + (sparkIter * sparkIter)

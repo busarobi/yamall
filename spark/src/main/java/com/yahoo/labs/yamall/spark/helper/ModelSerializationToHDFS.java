@@ -23,7 +23,6 @@ public class ModelSerializationToHDFS {
         FileSystem fileSystem = FileSystem.get(new Configuration());
         FileDeleter.delete(new File(dir + "/" + MODEL_BIN));
         fileSystem.moveFromLocalFile(new Path(MODEL_BIN), new Path(dir));
-
     }
 
 

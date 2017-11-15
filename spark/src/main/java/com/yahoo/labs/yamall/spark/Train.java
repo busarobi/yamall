@@ -1,12 +1,11 @@
 package com.yahoo.labs.yamall.spark;
 
 import com.yahoo.labs.yamall.parser.VWParser;
-import com.yahoo.labs.yamall.spark.core.PerCoordinateSVRGSpark;
 import com.yahoo.labs.yamall.spark.core.LearnerSpark;
+import com.yahoo.labs.yamall.spark.core.PerCoordinateSVRGSpark;
 import com.yahoo.labs.yamall.spark.gradient.BatchGradient;
 import com.yahoo.labs.yamall.spark.helper.Evaluate;
 import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
-import com.yahoo.labs.yamall.spark.helper.ModelSerializationToHDFS;
 import com.yahoo.labs.yamall.spark.helper.PosteriorComputer;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.spark.SparkConf;
@@ -40,7 +39,7 @@ public class Train {
     protected static long numSamples = 0;
     protected static boolean saveModelFlag = false;
     protected static int inputPartition = 0;
-
+    protected static boolean testAtTheEnd = true;
 
     public static void init(SparkConf sparkConf) throws IOException {
         FSDataInputStream fs ;
@@ -56,6 +55,7 @@ public class Train {
 
         method = sparkConf.get("spark.myapp.method");
         saveModelFlag = Boolean.parseBoolean(sparkConf.get("spark.myapp.save_model", "false"));
+        testAtTheEnd = Boolean.parseBoolean(sparkConf.get("spark.myapp.testattheend", "true"));
 
         // create learner
         vwparser = new VWParser(bitsHash, null, false);
@@ -111,7 +111,6 @@ public class Train {
 
         JavaRDD<String> testRDD = null;
         //long lineNum = input.count();
-
         if (method.compareToIgnoreCase("svrg_fr_spark") == 0 ) {
             learner = new PerCoordinateSVRGSpark(sparkConf, strb, bitsHash);
         } else if (method.compareToIgnoreCase("mini_batch_sgd") == 0 ) {
@@ -122,17 +121,29 @@ public class Train {
 
         if (! inputDirTest.isEmpty()) {
             testRDD = sparkContext.textFile(inputDirTest);
+
+        }
+        if (testAtTheEnd == false) {
             learner.setTestRDD(testRDD);
         }
+
         learner.train(input);
 
         if (saveModelFlag) {
-            ModelSerializationToHDFS.saveModel(outputDir, learner);
+            learner.saveModel(outputDir);
+            //ModelSerializationToHDFS.saveModel(outputDir, learner);
         }
 
         if (! inputDirTest.isEmpty()){
+            String line = "";
+
+            double trainLoss = Evaluate.getLoss(input,learner, bitsHash);
+            line = String.format("---+++ Train loss: %f Number of instances: %d\n", trainLoss, input.count());
+            strb.append(line);
+            saveLog();
+
             double testLoss = Evaluate.getLoss(testRDD,learner, bitsHash);
-            String line = String.format("---+++ Test loss: %f Number of instances: %d\n", testLoss, testRDD.count());
+            line = String.format("---+++ Test loss: %f Number of instances: %d\n", testLoss, testRDD.count());
             strb.append(line);
             saveLog();
 
