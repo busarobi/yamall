@@ -1,8 +1,11 @@
 package com.yahoo.labs.yamall.spark;
 
+import com.yahoo.labs.yamall.core.Instance;
 import com.yahoo.labs.yamall.ml.LogisticLoss;
+import com.yahoo.labs.yamall.parser.VWParser;
 import com.yahoo.labs.yamall.spark.helper.Evaluate;
 import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
+import it.unimi.dsi.fastutil.ints.Int2DoubleMap;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaDoubleRDD;
@@ -29,11 +32,14 @@ import org.apache.spark.sql.types.StructType;
 import scala.Tuple2;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Created by busafekete on 11/8/17.
  */
 public class TrainSparkMLLogReg {
+    protected enum INPUT_TYPE { LIBSVM, VW, CLKB};
     protected static String inputDir;
     protected static String inputDirTest;
     protected static String outputDir;
@@ -44,10 +50,11 @@ public class TrainSparkMLLogReg {
     protected static StringBuilder strb = new StringBuilder("");
 
     protected static String method = null;
-
+    protected static int bitsHash = 23;
 
     protected static double regParameter = 0.0;
     protected static boolean saveModelFlag = false;
+    protected static INPUT_TYPE inputType = INPUT_TYPE.LIBSVM;
     protected static int inputPartition = 0;
 
     public static void init(SparkConf sparkConf) throws IOException {
@@ -64,6 +71,25 @@ public class TrainSparkMLLogReg {
         method = sparkConf.get("spark.myapp.method");
         saveModelFlag = Boolean.parseBoolean(sparkConf.get("spark.myapp.save_model", "false"));
 
+        String typeOFInput = sparkConf.get("spark.myapp.inputtype");
+        switch (typeOFInput) {
+            case "libsvm":
+                inputType = INPUT_TYPE.LIBSVM;
+                break;
+            case "vw":
+                inputType = INPUT_TYPE.VW;
+                break;
+            case "clkb":
+                inputType = INPUT_TYPE.CLKB;
+                break;
+            default:
+                inputType = INPUT_TYPE.LIBSVM;
+                break;
+        }
+
+
+        bitsHash = Integer.parseInt(sparkConf.get("spark.myapp.bitshash", "23"));
+
         // create learner
 
         logFile = outputDir + "/log.txt";
@@ -79,6 +105,10 @@ public class TrainSparkMLLogReg {
         strb.append("--- Input partition: " + inputPartition + "\n" );
         strb.append("--- Method: " + method + "\n");
 
+        strb.append("--- Input type: " + inputType.toString() + "\n");
+        strb.append("--- Bits hash: " + bitsHash + "\n");
+
+
 
         System.out.println(strb.toString());
         saveLog();
@@ -89,10 +119,181 @@ public class TrainSparkMLLogReg {
         FileWriterToHDFS.writeToHDFS(logFile, strb.toString());
     }
 
-    static class LibSVMMLConverter implements Function<String,org.apache.spark.mllib.regression.LabeledPoint> {
+
+    static class VWToMLLabeledPoint implements Function<String,org.apache.spark.mllib.regression.LabeledPoint> {
+        protected int bitHash = 23;
+        protected int size = 2;
+        protected VWParser parser = null;
+
+        public VWToMLLabeledPoint(int bitHash){
+            parser = new VWParser(bitsHash, null, false);
+            this.bitHash = bitHash;
+            size = 2;
+            size <<= bitHash;
+        }
+
+        @Override
+        public org.apache.spark.mllib.regression.LabeledPoint call(String line) throws Exception {
+            line = line.trim();
+            Instance sample = parser.parse(line);
+            TreeMap<Integer, Double> data = new TreeMap<>();
+
+            for(Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
+                int key = entry.getIntKey();
+                double val = entry.getDoubleValue();
+                data.put(key, val);
+            }
+
+            double[] v = new double[data.size()];
+            int[] idx = new int[data.size()];
+
+            int i = 0;
+            for(Map.Entry<Integer, Double> entry : data.entrySet()){
+                idx[i] = entry.getKey();
+                v[i] = entry.getValue();
+                i++;
+            }
+
+
+            return (new org.apache.spark.mllib.regression.LabeledPoint(sample.getLabel(), Vectors.sparse(size, idx, v)));
+        }
+    }
+
+    static class VWToRow implements Function<String,Row> {
+        protected int bitHash = 23;
+        protected int size = 2;
+        protected VWParser parser = null;
+
+
+        VWToRow(int bitHash){
+            parser = new VWParser(bitsHash, null, false);
+            this.bitHash = bitHash;
+            this.size = 2;
+            this.size <<= bitHash;
+
+        }
+
+        @Override
+        public Row call(String line) throws Exception {
+            line = line.trim();
+            Instance sample = parser.parse(line);
+            TreeMap<Integer, Double> data = new TreeMap<>();
+
+            for(Int2DoubleMap.Entry entry : sample.getVector().int2DoubleEntrySet()) {
+                int key = entry.getIntKey();
+                double val = entry.getDoubleValue();
+                data.put(key, val);
+
+            }
+            double[] v = new double[data.size()];
+            int[] idx = new int[data.size()];
+
+            int i = 0;
+            for(Map.Entry<Integer, Double> entry : data.entrySet()){
+                idx[i] = entry.getKey();
+                v[i] = entry.getValue();
+                i++;
+            }
+
+            Row points = RowFactory.create(sample.getLabel(),org.apache.spark.ml.linalg.Vectors.sparse(size, idx, v));
+            return points;
+        }
+    }
+
+    static class MaxFeatIndexClkb implements DoubleFunction<String> {
+        @Override
+        public double call(String line) throws Exception {
+            String features = line.split("\\|")[1].trim();
+            String[] parts = features.split(" ");
+            double max = 0;
+            for(String p: parts) {
+                double idx = Double.parseDouble(p);
+                if (idx>max) max = idx;
+            }
+            return max;
+        }
+    }
+
+    static class ClkbToRow implements Function<String,Row> {
         protected int size = 0;
 
-        public LibSVMMLConverter( int numOfFeatures){
+        ClkbToRow(int numOfFeatures){
+            this.size = numOfFeatures;
+        }
+
+        @Override
+        public Row call(String line) throws Exception {
+            String labelString = line.split("\\|")[0].split(" ")[0];
+            double label = (Double.parseDouble(labelString)+1.0)/2.0;
+
+            String[] parts = line.split("\\|")[1].trim().split(" ");
+
+
+            TreeMap<Integer, Double> data = new TreeMap<>();
+
+            for(String p: parts) {
+                int idx = Integer.parseInt(p)-1;
+                data.put(idx, 1.0);
+
+            }
+            double[] v = new double[data.size()];
+            int[] idx = new int[data.size()];
+
+            int i = 0;
+            for(Map.Entry<Integer, Double> entry : data.entrySet()){
+                idx[i] = entry.getKey();
+                v[i] = entry.getValue();
+                i++;
+            }
+
+            Row points = RowFactory.create(label,org.apache.spark.ml.linalg.Vectors.sparse(size, idx, v));
+            return points;
+        }
+    }
+
+
+    static class ClkbToMLLabeledPoint implements Function<String,org.apache.spark.mllib.regression.LabeledPoint> {
+        protected int size = 0;
+
+        ClkbToMLLabeledPoint(int numOfFeatures){
+            this.size = numOfFeatures;
+        }
+
+        @Override
+        public org.apache.spark.mllib.regression.LabeledPoint call(String line) throws Exception {
+            String labelString = line.split("\\|")[0].split(" ")[0];
+            double label = (Double.parseDouble(labelString)+1.0)/2.0;
+            String[] parts = line.split("\\|")[1].trim().split(" ");
+
+
+            TreeMap<Integer, Double> data = new TreeMap<>();
+
+            for(String p: parts) {
+                int idx = Integer.parseInt(p)-1;
+                data.put(idx, 1.0);
+
+            }
+            double[] v = new double[data.size()];
+            int[] idx = new int[data.size()];
+
+            int i = 0;
+            for(Map.Entry<Integer, Double> entry : data.entrySet()){
+                idx[i] = entry.getKey();
+                v[i] = entry.getValue();
+                i++;
+            }
+
+            return (new org.apache.spark.mllib.regression.LabeledPoint(label, Vectors.sparse(size, idx, v)));
+        }
+    }
+
+
+
+
+    static class LibSVMToMLLabeledPoint implements Function<String,org.apache.spark.mllib.regression.LabeledPoint> {
+        protected int size = 0;
+
+        public LibSVMToMLLabeledPoint(int numOfFeatures){
             this.size = numOfFeatures;
         }
 
@@ -181,26 +382,44 @@ public class TrainSparkMLLogReg {
         JavaRDD<String> testingRdd = sparkContext.textFile(inputDirTest);
 
         // number of features
-        JavaDoubleRDD maxVals = trainingRdd.mapToDouble(new MaxFeatIndex());
-        Integer numOfFeatures = maxVals.max().intValue();
+        Integer numOfFeatures = 0;
+        if (inputType == INPUT_TYPE.LIBSVM) {
+            JavaDoubleRDD maxVals = trainingRdd.mapToDouble(new MaxFeatIndex());
+            numOfFeatures = maxVals.max().intValue();
+        } else if (inputType == INPUT_TYPE.VW) {
+            numOfFeatures = 2;
+            numOfFeatures <<= bitsHash;
+        } else if (inputType == INPUT_TYPE.CLKB) {
+            JavaDoubleRDD maxVals = trainingRdd.mapToDouble(new MaxFeatIndexClkb());
+            numOfFeatures = maxVals.max().intValue();
+        }
+
         System.out.println( "Number of features: " + numOfFeatures );
         strb.append( "Number of features: " + numOfFeatures + "\n");
         saveLog();
 
         //
-        JavaRDD<Row> pointsTrain = trainingRdd.map(new LibSVMToRow(numOfFeatures));
-        JavaRDD<Row> pointsTest = testingRdd.map(new LibSVMToRow(numOfFeatures));
+        JavaRDD<Row> pointsTrain = null;
+        JavaRDD<Row> pointsTest = null;
 
-        //JavaRDD<Row> points = spark.read().text(inputDir).javaRDD().map(new LibSVMToRow());
+        if (inputType == INPUT_TYPE.LIBSVM) {
+            pointsTrain = trainingRdd.map(new LibSVMToRow(numOfFeatures));
+            pointsTest = testingRdd.map(new LibSVMToRow(numOfFeatures));
+        } else if (inputType == INPUT_TYPE.VW) {
+            pointsTrain = trainingRdd.map(new VWToRow(bitsHash));
+            pointsTest = testingRdd.map(new VWToRow(bitsHash));
+        } else if (inputType == INPUT_TYPE.CLKB) {
+            pointsTrain = trainingRdd.map(new ClkbToRow(numOfFeatures));
+            pointsTest = testingRdd.map(new ClkbToRow(numOfFeatures));
+        }
+
+
         StructField[] fields = {
                 new StructField("label", DataTypes.DoubleType, false, Metadata.empty()),
                 new StructField("features", new VectorUDT(), false, Metadata.empty())};
         StructType schema = new StructType(fields);
         Dataset<Row> trainingdf = spark.createDataFrame(pointsTrain, schema);
         Dataset<Row> testingdf = spark.createDataFrame(pointsTest, schema);
-
-        //Dataset<Row> trainingdf = spark.sqlContext().read().format("libsvm").option("numFeatures", numOfFeatures.toString()).load(inputDir);
-        //Dataset<Row> testingdf = spark.sqlContext().read().format("libsvm").option("numFeatures", numOfFeatures.toString()).load(inputDirTest);
 
         long clusterStartTime = System.currentTimeMillis();
 
@@ -220,20 +439,20 @@ public class TrainSparkMLLogReg {
 
 
         // Print the coefficients and intercepts for logistic regression with multinomial family
-        System.out.println("Multinomial coefficients: " + lrModel.coefficientMatrix()
-                + "\nMultinomial intercepts: " + lrModel.interceptVector());
-        strb.append("Multinomial coefficients: " + lrModel.coefficientMatrix() + "\n");
-        strb.append("Multinomial intercepts: " +lrModel.interceptVector() + "\n");
+//        System.out.println("Multinomial coefficients: " + lrModel.coefficientMatrix()
+//                + "\nMultinomial intercepts: " + lrModel.interceptVector());
+//        strb.append("Multinomial coefficients: " + lrModel.coefficientMatrix() + "\n");
+//        strb.append("Multinomial intercepts: " +lrModel.interceptVector() + "\n");
         // Extract the summary from the returned LogisticRegressionModel instance trained in the earlier
         // example
 
-        strb.append( "#0 bias " + lrModel.intercept() + "\n");
-        double[] coeffs = lrModel.coefficients().toArray();
-        for(int i = 0; i < coeffs.length; i++ ){
-            strb.append( "#"+(i+1) + "\t" + String.format("%.10f", coeffs[i]) + "\n");
-        }
-
-        saveLog();
+//        strb.append( "#0 bias " + lrModel.intercept() + "\n");
+//        double[] coeffs = lrModel.coefficients().toArray();
+//        for(int i = 0; i < coeffs.length; i++ ){
+//            strb.append( "#"+(i+1) + "\t" + String.format("%.10f", coeffs[i]) + "\n");
+//        }
+//
+//        saveLog();
 
         LogisticRegressionTrainingSummary trainingSummary = lrModel.summary();
 
@@ -273,7 +492,18 @@ public class TrainSparkMLLogReg {
         //predictions.javaRDD().saveAsTextFile(outputDir + "/scores_Df");
         //
         JavaRDD<String> testRdd = sparkContext.textFile(inputDirTest);
-        JavaRDD<org.apache.spark.mllib.regression.LabeledPoint> test = testRdd.map(new LibSVMMLConverter(numOfFeatures));
+        JavaRDD<org.apache.spark.mllib.regression.LabeledPoint> test = null;
+
+
+        if (inputType == INPUT_TYPE.LIBSVM) {
+            test = testRdd.map(new LibSVMToMLLabeledPoint(numOfFeatures));
+        } else if (inputType == INPUT_TYPE.VW) {
+            test = testRdd.map(new VWToMLLabeledPoint(bitsHash));
+        } else if (inputType == INPUT_TYPE.CLKB) {
+            test = testRdd.map(new ClkbToMLLabeledPoint(numOfFeatures));
+        }
+
+
         JavaPairRDD<Double,Double> predictionAndLabels = test.mapToPair(p -> new Tuple2<Double,Double>(lrModel.predictRaw(p.features().asML()).toArray()[1], p.label()));
         JavaDoubleRDD losses = predictionAndLabels.mapToDouble( scoreandlabel -> (new LogisticLoss()).lossValue(scoreandlabel._1(),(2.0*scoreandlabel._2())-1.0));
         Evaluate.computeResult(strb, predictionAndLabels.mapToPair(a -> new Tuple2<Object, Object>(a._1(),a._2())), 10);

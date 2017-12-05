@@ -3,6 +3,7 @@ package com.yahoo.labs.yamall.spark;
 import com.yahoo.labs.yamall.parser.VWParser;
 import com.yahoo.labs.yamall.spark.core.LearnerSpark;
 import com.yahoo.labs.yamall.spark.core.PerCoordinateSVRGSpark;
+import com.yahoo.labs.yamall.spark.core.PerCoordinateSVRGSparkBoosted;
 import com.yahoo.labs.yamall.spark.gradient.BatchGradient;
 import com.yahoo.labs.yamall.spark.helper.Evaluate;
 import com.yahoo.labs.yamall.spark.helper.FileWriterToHDFS;
@@ -113,10 +114,17 @@ public class Train {
         //long lineNum = input.count();
         if (method.compareToIgnoreCase("svrg_fr_spark") == 0 ) {
             learner = new PerCoordinateSVRGSpark(sparkConf, strb, bitsHash);
+        } else if (method.compareToIgnoreCase("svrg_fr_spark_boosted") == 0 ) {
+            learner = new PerCoordinateSVRGSparkBoosted(sparkConf, strb, bitsHash);
         } else if (method.compareToIgnoreCase("mini_batch_sgd") == 0 ) {
             PerCoordinateSVRGSpark mbsgd = new PerCoordinateSVRGSpark(sparkConf, strb, bitsHash);
             mbsgd.useMiniBatchSGD();
             learner = mbsgd;
+        } else {
+            strb.append("Unknown learner! \n");
+            saveLog();
+
+            System.exit(-1);
         }
 
         if (! inputDirTest.isEmpty()) {

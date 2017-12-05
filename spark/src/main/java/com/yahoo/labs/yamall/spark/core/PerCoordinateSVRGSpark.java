@@ -34,15 +34,15 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
     protected StringBuilder strb = new StringBuilder("");
     protected boolean miniBatchSGD = false;
     protected String outputDir = "";
-    protected int batchSize = 100000;
-    protected int numSGDPartitions = 10;
+    protected int batchSize = 1000000;
+    protected int numSGDPartitions = 1;
     protected JavaRDD<String> testRDD = null;
 
     public void init(SparkConf sparkConf) {
         outputDir = sparkConf.get("spark.myapp.outdir");
         // obsolete parameter, it gets updated based on batchSize
         sparkIter = Integer.parseInt(sparkConf.get("spark.myapp.iter", "10"));
-        numSGDPartitions = Integer.parseInt(sparkConf.get("spark.myapp.sgdpartition", "10"));
+        numSGDPartitions = Integer.parseInt(sparkConf.get("spark.myapp.sgdpartition", "1"));
         logFile = outputDir + "/log.txt";
 
         strb.append("---++++++++ Learner report\n");
@@ -89,8 +89,8 @@ public class PerCoordinateSVRGSpark extends PerCoordinateSVRG implements Learner
 
     public PerCoordinateSVRGSpark(SparkConf sparkConf, StringBuilder strb, int bitsHash) {
         super(bitsHash);
-
         this.bitsHash = bitsHash;
+
         batchSize = Integer.parseInt(sparkConf.get("spark.myapp.batchsize", "1000"));
         this.setSGDSize(batchSize);
 

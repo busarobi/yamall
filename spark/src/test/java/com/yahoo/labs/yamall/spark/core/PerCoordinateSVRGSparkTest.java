@@ -15,7 +15,7 @@ public class PerCoordinateSVRGSparkTest {
     protected static String inputDirTest = "/Users/busafekete/work/DistOpt/Clkb_data_test/";
     protected static String outDir = "/Users/busafekete/work/DistOpt/tmp/";
     protected static String logFile = outDir + "log.txt";
-    protected static int bits = 22;
+    protected static int bits = 20;
     @Test
     public void testTrain() throws Exception {
         SparkConf sparkConf = new SparkConf().setAppName("spark yamall (parallel training)");
@@ -24,6 +24,8 @@ public class PerCoordinateSVRGSparkTest {
         sparkConf.set("spark.myapp.iter", "10");
         sparkConf.set("executor-memory", "14G");
         sparkConf.set("driver-memory", "14G");
+        sparkConf.set("spark.driver.maxResultSize", "14G" );
+        sparkConf.set("spark.myapp.batchsize", "500000" );
 
         JavaSparkContext sparkContext = new JavaSparkContext("local[*]", "Test");
 
@@ -36,7 +38,7 @@ public class PerCoordinateSVRGSparkTest {
 
 
         double testLoss = Evaluate.getLoss(sparkContext,inputDirTest,learner, bits);
-        String line = String.format("%d %f %f %f\n", 0, testLoss);
+        String line = String.format("Test loss: %f\n", testLoss);
         strb.append(line);
 
         Evaluate.computeResult(strb,sparkContext,inputDirTest,learner, bits);
